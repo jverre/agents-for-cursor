@@ -1,0 +1,34 @@
+{
+  "name": "cursor-acp-extension",
+  "displayName": "Cursor ACP Integration",
+  "description": "Integrate Agent Client Protocol (ACP) providers into Cursor",
+  "version": "0.1.0",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:acp.enable",
+    "onCommand:acp.disable",
+    "onCommand:acp.reload"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "acp.enable",
+        "title": "ACP: Enable"
+      },
+      {
+        "command": "acp.disable",
+        "title": "ACP: Disable"
+      },
+      {
+        "command": "acp.reload",
+        "title": "ACP: Reload"
+      }
+    ]
+  }
+}
