@@ -630,9 +630,410 @@ cursor-acp-extension/
    - Start with: read_file, write_file, edit_file, run_terminal, search
    - Later: list_files, get_diagnostics, etc.
 
+## Phase 6: Plan Mode Support
+
+**Goal:** Support Cursor's planning mode where agent creates a plan before execution
+
+### Cursor's Unified Modes
+
+From the codebase analysis:
+
+```javascript
+enum UnifiedMode {
+    UNSPECIFIED = 0,
+    CHAT = 1,      // Normal chat conversation
+    AGENT = 2,     // Agentic mode with tool execution
+    EDIT = 3,      // Direct file editing
+    CUSTOM = 4,    // Custom mode
+    PLAN = 5,      // Planning mode - create plan first
+    DEBUG = 6      // Debug mode
+}
+```
+
+### Plan Mode Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    User sends message in PLAN mode                   │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                         ACP Agent                                    │
+│  1. Analyze task                                                     │
+│  2. Create step-by-step plan                                         │
+│  3. Ask clarifying questions (ASK_QUESTION tool)                     │
+│  4. Wait for user approval                                           │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │ User approves plan
+                               ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Execute Plan                                 │
+│  - SWITCH_MODE to AGENT mode                                         │
+│  - Execute each step with tools                                      │
+│  - Report progress                                                   │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Plan Mode Tools
+
+```javascript
+// Tools available in plan mode
+const PLAN_MODE_TOOLS = {
+    CREATE_PLAN: 43,      // Create a structured plan
+    ASK_QUESTION: 51,     // Ask user clarifying questions
+    SWITCH_MODE: 52,      // Switch to execution mode
+    TODO_READ: 34,        // Read existing TODOs
+    TODO_WRITE: 35        // Write TODO items
+};
+```
+
+### Implementation
+
+```javascript
+// In ACP session - handle plan mode
+class ACPSession {
+    constructor(sessionId, options) {
+        this.sessionId = sessionId;
+        this.mode = options.mode || 'agent';  // 'chat', 'agent', 'plan'
+        this.plan = null;
+        this.planApproved = false;
+    }
+
+    async sendPrompt(message, mode) {
+        // Include mode in session/prompt
+        this.send({
+            jsonrpc: '2.0',
+            id: ++this.requestId,
+            method: 'session/prompt',
+            params: {
+                sessionId: this.sessionId,
+                message: { type: 'text', text: message },
+                mode: mode  // 'chat', 'agent', 'plan'
+            }
+        });
+    }
+
+    handlePlanUpdate(plan) {
+        // Agent sent a plan - show to user for approval
+        this.plan = plan;
+        this.callbacks.onPlanCreated(plan);
+    }
+
+    async approvePlan() {
+        this.planApproved = true;
+        // Send approval to agent
+        this.send({
+            jsonrpc: '2.0',
+            method: 'session/plan_approved',
+            params: {
+                sessionId: this.sessionId,
+                approved: true
+            }
+        });
+    }
+
+    async rejectPlan(feedback) {
+        // Send rejection with feedback
+        this.send({
+            jsonrpc: '2.0',
+            method: 'session/plan_approved',
+            params: {
+                sessionId: this.sessionId,
+                approved: false,
+                feedback: feedback
+            }
+        });
+    }
+}
+```
+
+### Plan UI Updates
+
+```javascript
+// Callbacks for plan mode
+const planModeCallbacks = {
+    onPlanCreated: (plan) => {
+        // Display plan in UI with approve/reject buttons
+        this._composerDataService.addPlanBubble(composerHandle, {
+            bubbleId: ss(),
+            type: 'plan',
+            steps: plan.steps,
+            status: 'pending_approval'
+        });
+    },
+
+    onPlanStepStarted: (stepIndex) => {
+        // Highlight current step
+        this._composerDataService.updatePlanStep(stepIndex, 'in_progress');
+    },
+
+    onPlanStepCompleted: (stepIndex, result) => {
+        // Mark step as done
+        this._composerDataService.updatePlanStep(stepIndex, 'completed', result);
+    }
+};
+```
+
+## Phase 7: Follow-up Questions (Elicitation)
+
+**Goal:** Allow agent to ask clarifying questions before/during execution
+
+### Elicitation Handler
+
+From cursor-agent-exec architecture:
+
+```javascript
+createSession(sessionId, approvalHandler, elicitationHandler, options)
+//                                        ^^^^^^^^^^^^^^^^
+//                                        This handles follow-up questions
+```
+
+### Question Types
+
+```javascript
+// Types of questions agent can ask
+const QuestionTypes = {
+    CLARIFICATION: 'clarification',      // "Did you mean X or Y?"
+    CONFIRMATION: 'confirmation',         // "Should I proceed with X?"
+    INPUT_REQUIRED: 'input_required',     // "What should the function name be?"
+    CHOICE: 'choice',                     // "Which option: A, B, or C?"
+    FILE_SELECTION: 'file_selection'      // "Which file should I modify?"
+};
+```
+
+### ACP Question Protocol
+
+```javascript
+// Agent sends question notification
+{
+    "jsonrpc": "2.0",
+    "method": "session/update",
+    "params": {
+        "sessionId": "sess_123",
+        "update": {
+            "type": "question",
+            "questionId": "q_001",
+            "questionType": "choice",
+            "text": "Which authentication method should I implement?",
+            "options": [
+                { "id": "oauth", "label": "OAuth 2.0" },
+                { "id": "jwt", "label": "JWT tokens" },
+                { "id": "session", "label": "Session-based" }
+            ],
+            "required": true
+        }
+    }
+}
+
+// Client sends answer
+{
+    "jsonrpc": "2.0",
+    "method": "session/answer",
+    "params": {
+        "sessionId": "sess_123",
+        "questionId": "q_001",
+        "answer": {
+            "type": "choice",
+            "selectedId": "jwt"
+        }
+    }
+}
+```
+
+### Implementation
+
+```javascript
+// Elicitation handler
+class ElicitationHandler {
+    constructor(callbacks) {
+        this.callbacks = callbacks;
+        this.pendingQuestions = new Map();
+    }
+
+    async handleQuestion(question) {
+        const { questionId, questionType, text, options, required } = question;
+
+        // Store pending question
+        this.pendingQuestions.set(questionId, question);
+
+        // Show question in UI
+        const answer = await this.callbacks.showQuestion({
+            questionId,
+            questionType,
+            text,
+            options,
+            required
+        });
+
+        // Remove from pending
+        this.pendingQuestions.delete(questionId);
+
+        return answer;
+    }
+}
+
+// UI callback implementations
+const elicitationCallbacks = {
+    showQuestion: async (question) => {
+        switch (question.questionType) {
+            case 'clarification':
+            case 'confirmation':
+                // Show yes/no dialog
+                return await vscode.window.showInformationMessage(
+                    question.text,
+                    { modal: true },
+                    'Yes', 'No'
+                );
+
+            case 'choice':
+                // Show quick pick
+                const selected = await vscode.window.showQuickPick(
+                    question.options.map(o => ({
+                        label: o.label,
+                        id: o.id
+                    })),
+                    { placeHolder: question.text }
+                );
+                return selected?.id;
+
+            case 'input_required':
+                // Show input box
+                return await vscode.window.showInputBox({
+                    prompt: question.text,
+                    ignoreFocusOut: true
+                });
+
+            case 'file_selection':
+                // Show file picker
+                const files = await vscode.window.showOpenDialog({
+                    canSelectMany: false,
+                    title: question.text
+                });
+                return files?.[0]?.fsPath;
+        }
+    }
+};
+```
+
+### Question Display in Composer
+
+```javascript
+// Patch for displaying questions in chat UI
+onQuestion: (question) => {
+    // Add question bubble to conversation
+    this._composerDataService.appendComposerBubbles(composerHandle, [{
+        bubbleId: ss(),
+        type: 'question',
+        questionId: question.questionId,
+        text: question.text,
+        questionType: question.questionType,
+        options: question.options,
+        status: 'awaiting_answer'
+    }]);
+
+    // Focus input for answer
+    this._composerViewsService.focus(composerId, true);
+},
+
+onQuestionAnswered: (questionId, answer) => {
+    // Update question bubble with answer
+    this._composerDataService.updateQuestionBubble(questionId, {
+        status: 'answered',
+        answer: answer
+    });
+}
+```
+
+### Integration with ACP Session
+
+```javascript
+class ACPSession {
+    async handleNotification(method, params) {
+        switch (method) {
+            case 'session/update':
+                const update = params.update;
+
+                if (update.type === 'question') {
+                    // Agent is asking a question
+                    const answer = await this.elicitationHandler.handleQuestion(update);
+
+                    // Send answer back to agent
+                    this.send({
+                        jsonrpc: '2.0',
+                        method: 'session/answer',
+                        params: {
+                            sessionId: this.sessionId,
+                            questionId: update.questionId,
+                            answer: answer
+                        }
+                    });
+                }
+                break;
+        }
+    }
+}
+```
+
+## Updated Implementation Order
+
+1. **Phase 1** - Subprocess management
+2. **Phase 2** - JSON-RPC protocol
+3. **Phase 3** - Tool execution
+4. **Phase 4** - UI streaming
+5. **Phase 5** - Permissions
+6. **Phase 6** - Plan mode support
+   - [ ] Detect unified_mode from request
+   - [ ] Handle CREATE_PLAN tool
+   - [ ] Plan approval UI
+   - [ ] SWITCH_MODE handling
+7. **Phase 7** - Follow-up questions
+   - [ ] ElicitationHandler class
+   - [ ] Question types support
+   - [ ] Question UI in Composer
+   - [ ] Answer routing back to agent
+
+## Session Modes in ACP
+
+When creating an ACP session, specify supported modes:
+
+```javascript
+// Initialize with session modes
+{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+        "protocolVersion": 1,
+        "clientCapabilities": {
+            "sessionModes": ["chat", "agent", "plan"],  // Supported modes
+            "tools": { "call": true },
+            "elicitation": true,  // Supports follow-up questions
+            "planApproval": true  // Supports plan review
+        }
+    }
+}
+
+// Agent responds with its capabilities
+{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+        "protocolVersion": 1,
+        "agentCapabilities": {
+            "sessionModes": ["chat", "agent"],  // Agent supports these modes
+            "tools": ["read_file", "edit_file", "run_terminal"],
+            "supportsPlanning": true,
+            "supportsElicitation": true
+        }
+    }
+}
+```
+
 ## References
 
 - ACP Protocol: https://agentclientprotocol.com
 - cursor-agent-exec: `investigations/CURSOR_AGENT_EXEC_EXPLAINED.md`
 - Message flow: `investigations/CHAT_MESSAGE_FLOW.md`
+- Tools system: `investigations/TOOLS_SYSTEM.md`
 - Current patches: `cursor-acp-extension/patcher.js`
