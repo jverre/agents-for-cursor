@@ -18,14 +18,17 @@ try {
         id: 'claude-code',
         displayName: 'Claude Code',
         type: 'stdio',
-        command: 'echo',  // Placeholder - will be real command later
-        args: ['Hello from ACP'],
+        command: 'claude-code-acp',  // Real Claude Code ACP server
+        args: [],
         capabilities: {
           supportsAgent: true,
           supportsImages: false,
           supportsThinking: true
         },
-        status: 'disconnected'
+        status: 'disconnected',
+        env: {
+          // ANTHROPIC_API_KEY inherited from parent process
+        }
       };
 
       this.providers.set('claude-code', testProvider);
@@ -62,27 +65,46 @@ try {
         };
       }
 
-      // For now, return a mock response
-      // TODO: Actually spawn subprocess and communicate via JSON-RPC
-      return {
-        id: 'acp-' + Date.now(),
-        object: 'chat.completion',
-        created: Math.floor(Date.now() / 1000),
-        model: modelName,
-        choices: [{
-          index: 0,
-          message: {
-            role: 'assistant',
-            content: `[ACP Demo Response]\n\nProvider: ${provider.displayName}\nCommand: ${provider.command} ${provider.args?.join(' ')}\n\nYour message: "${messages[messages.length - 1]?.content || 'unknown'}"\n\nNote: This is a mock response. Real ACP subprocess communication will be implemented next.`
-          },
-          finish_reason: 'stop'
-        }],
-        usage: {
-          prompt_tokens: 100,
-          completion_tokens: 50,
-          total_tokens: 150
+      try {
+        console.log('[ACP] Checking for extension bridge...');
+
+        // Check if extension bridge is available
+        if (window.acpExtensionBridge && window.acpExtensionBridge.sendMessage) {
+          console.log('[ACP] Extension bridge found, calling sendMessage...');
+          const response = await window.acpExtensionBridge.sendMessage(provider, messages);
+          console.log('[ACP] Got response from extension:', response);
+          return response;
+        } else {
+          // Fallback to mock if extension bridge not available
+          console.warn('[ACP] Extension bridge not available, using mock response');
+          console.warn('[ACP] window.acpExtensionBridge =', window.acpExtensionBridge);
+          return {
+            id: 'acp-' + Date.now(),
+            object: 'chat.completion',
+            created: Math.floor(Date.now() / 1000),
+            model: modelName,
+            choices: [{
+              index: 0,
+              message: {
+                role: 'assistant',
+                content: `[ACP Mock Response]\n\nProvider: ${provider.displayName}\nCommand: ${provider.command} ${provider.args?.join(' ')}\n\nYour message: "${messages[messages.length - 1]?.content || 'unknown'}"\n\nNote: Extension bridge not available. Make sure the extension is loaded.`
+              },
+              finish_reason: 'stop'
+            }],
+            usage: {
+              prompt_tokens: 100,
+              completion_tokens: 50,
+              total_tokens: 150
+            }
+          };
         }
-      };
+      } catch (error) {
+        console.error('[ACP] Error calling extension:', error);
+        return {
+          error: true,
+          message: `ACP error: ${error.message}`
+        };
+      }
     }
   }
 

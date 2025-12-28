@@ -76,13 +76,15 @@ async function applyPatches() {
     const patchesDir = path.join(__dirname, 'patches');
     const acpServicePatch = await readPatchFile(path.join(patchesDir, 'acp-service.js'));
     const modelPatch = await readPatchFile(path.join(patchesDir, 'model-patch.js'));
+    const extensionBridgePatch = await readPatchFile(path.join(patchesDir, 'extension-bridge.js'));
 
-    // Prepend patches to bootstrap workbench (provider-patch goes in main workbench)
+    // Prepend patches to bootstrap workbench
     const patchedContent = '// ACP Integration - DO NOT EDIT MANUALLY\n' +
         '(function() {\n' +
         '  "use strict";\n' +
         '  console.log("[ACP] Initializing ACP integration patches...");\n' +
         '\n' +
+        extensionBridgePatch + '\n\n' +
         acpServicePatch + '\n\n' +
         modelPatch + '\n' +
         '  console.log("[ACP] ACP integration patches loaded in bootstrap");\n' +
