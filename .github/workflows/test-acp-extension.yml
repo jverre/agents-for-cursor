@@ -31,9 +31,6 @@ jobs:
             libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libgtk-3-0 xvfb
           sudo apt-get install -y libasound2t64 || sudo apt-get install -y libasound2 || true
 
-      - name: Install Claude Code ACP Server
-        run: npm install -g @zed-industries/claude-code-acp
-
       - name: Download and install Cursor
         working-directory: cursor-acp-extension
         run: |
