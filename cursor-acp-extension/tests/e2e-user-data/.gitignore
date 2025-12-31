@@ -1,0 +1,5 @@
+# Ignore all - contains Cursor auth secrets
+# CI injects auth via setup-test-auth.js
+*
+!.gitignore
+!README.md

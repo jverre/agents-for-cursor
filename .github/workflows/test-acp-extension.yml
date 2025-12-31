@@ -1,0 +1,114 @@
+name: Test ACP Extension
+
+on:
+  pull_request:
+  push:
+    branches: [main, master, develop]
+  workflow_dispatch:
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: cursor-acp-extension/package-lock.json
+
+      - name: Install dependencies
+        working-directory: cursor-acp-extension
+        run: npm ci
+
+      - name: Install system libs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libnss3 libatk-bridge2.0-0 libdrm2 libxkbcommon0 \
+            libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libgtk-3-0 xvfb
+          sudo apt-get install -y libasound2t64 || sudo apt-get install -y libasound2 || true
+
+      - name: Install Claude Code ACP Server
+        run: npm install -g @zed-industries/claude-code-acp
+
+      - name: Verify claude-code-acp is available
+        run: |
+          which claude-code-acp
+          claude-code-acp --version || echo "Note: claude-code-acp may not support --version"
+
+      - name: Download and install Cursor
+        working-directory: cursor-acp-extension
+        run: |
+          npm run download-cursor
+          node tests/helpers/cursor-installer.js install
+
+      - name: Debug - Find workbench location
+        run: |
+          echo "=== Locating workbench.desktop.main.js ==="
+          WORKBENCH_PATH=$(find "$HOME/.local/share/Cursor" -name "workbench.desktop.main.js" 2>/dev/null | head -1)
+          if [ -n "$WORKBENCH_PATH" ]; then
+            echo "Found: $WORKBENCH_PATH"
+            RESOURCES_APP=$(dirname $(dirname $(dirname $WORKBENCH_PATH)))
+            echo "Resources app dir: $RESOURCES_APP"
+            echo ""
+            echo "=== Checking what vscode.env.appRoot should be ==="
+            echo "Expected appRoot: $RESOURCES_APP"
+            ls -la "$RESOURCES_APP" | head -20
+          else
+            echo "ERROR: workbench.desktop.main.js not found!"
+          fi
+
+      - name: Setup test auth
+        working-directory: cursor-acp-extension
+        env:
+          CURSOR_AUTH_TOKEN: ${{ secrets.CURSOR_AUTH_TOKEN }}
+          CURSOR_EMAIL: ${{ secrets.CURSOR_EMAIL }}
+        run: node tests/helpers/setup-test-auth.js
+
+      - name: Run tests
+        working-directory: cursor-acp-extension
+        run: xvfb-run --auto-servernum npm run test:e2e
+        env:
+          CI: true
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Debug - Verify patches applied
+        if: always()
+        run: |
+          WORKBENCH=$(find "$HOME/.local/share/Cursor" -name "workbench.desktop.main.js" 2>/dev/null | head -1)
+          if [ -z "$WORKBENCH" ]; then
+            echo "ERROR: workbench.desktop.main.js not found!"
+            exit 0
+          fi
+          echo "Found workbench at: $WORKBENCH"
+          echo "=== Checking if ACP model was injected ==="
+          grep -c "acp:claude-code" "$WORKBENCH" || echo "NOT FOUND - Patches NOT applied!"
+          echo ""
+          echo "=== Checking if ACP interception was added ==="
+          grep -c "ACP CHAT INTERCEPTION" "$WORKBENCH" || echo "NOT FOUND - Interception NOT applied!"
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: cursor-acp-extension/tests/screenshots/
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs
+          path: cursor-acp-extension/tests/logs/
+
+      - name: Upload extension host logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-logs
+          path: |
+            cursor-acp-extension/tests/e2e-user-data/logs/
+            ~/.config/Cursor/logs/

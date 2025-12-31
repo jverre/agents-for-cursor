@@ -247,7 +247,7 @@ class ACPAgentManager {
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
-    console.log('cursor-acp-extension activated');
+    console.log('[ACP] Extension activating...');
 
     const agentManager = new ACPAgentManager();
 
@@ -333,6 +333,11 @@ function activate(context) {
         }
     });
 
+    server.on('error', (err) => {
+        console.error('[ACP] HTTP server error:', err);
+        vscode.window.showErrorMessage(`[ACP] Failed to start server: ${err.message}`);
+    });
+
     server.listen(37842, 'localhost', () => {
         console.log('[ACP] HTTP server listening on http://localhost:37842');
         vscode.window.showInformationMessage('[ACP] Bridge server started on port 37842');
@@ -359,7 +364,8 @@ function activate(context) {
             await patcher.applyPatches();
 
             // Fix checksums to prevent corruption warnings
-            await checksumFixer.fixChecksums();
+            // TODO: Temporarily commented out to test if this is causing the hang
+            // await checksumFixer.fixChecksums();
 
             vscode.window.showInformationMessage(
                 'ACP integration enabled! Please restart Cursor for changes to take effect.',
@@ -384,7 +390,7 @@ function activate(context) {
             await patcher.removePatches();
 
             // Restore original checksums
-            await checksumFixer.restoreChecksums();
+            // await checksumFixer.restoreChecksums();
 
             vscode.window.showInformationMessage(
                 'ACP integration disabled! Please restart Cursor for changes to take effect.',

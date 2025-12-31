@@ -1,3 +1,19 @@
 node_modules/
 *.vsix
 .vscode-test/
+
+# Test artifacts
+tests/screenshots/
+tests/logs/
+tests/test-user-data
+coverage/
+test-results/
+.cursor-test-cache/
+
+# Allow the pre-configured e2e-user-data directory
+!tests/e2e-user-data/
+
+# Test downloads
+*.dmg
+*.AppImage
+*.exe

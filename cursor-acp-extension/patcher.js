@@ -31,132 +31,174 @@ function getMainBackupPath() {
 // Check if patches are already applied
 async function isPatchApplied() {
     try {
+        console.log('[Patcher] isPatchApplied() started');
+
+        // Check bootstrap workbench
         const workbenchPath = getWorkbenchPath();
+        console.log('[Patcher] Reading bootstrap workbench:', workbenchPath);
         const content = await fs.readFile(workbenchPath, 'utf8');
-        return content.includes('// ACP Integration');
+        const bootstrapPatched = content.includes('// ACP Integration');
+        console.log(`[Patcher] Bootstrap patched: ${bootstrapPatched}`);
+
+        // Check main workbench
+        const mainWorkbenchPath = getMainWorkbenchPath();
+        console.log('[Patcher] Reading main workbench:', mainWorkbenchPath);
+        const mainContent = await fs.readFile(mainWorkbenchPath, 'utf8');
+        const mainPatched = mainContent.includes('/* ACP CHAT INTERCEPTION */');
+        console.log(`[Patcher] Main patched: ${mainPatched}`);
+
+        console.log(`[Patcher] Bootstrap patched: ${bootstrapPatched}, Main patched: ${mainPatched}`);
+
+        return bootstrapPatched && mainPatched;
     } catch (error) {
+        console.error('[Patcher] Error checking if patched:', error);
         return false;
     }
 }
 
 // Apply patches to workbench file
 async function applyPatches() {
-    const workbenchPath = getWorkbenchPath();
-    const backupPath = getBackupPath();
-
-    console.log('Workbench path:', workbenchPath);
-    console.log('Backup path:', backupPath);
-
-    // Check if already patched
-    if (await isPatchApplied()) {
-        console.log('Patches already applied, skipping...');
-        return;
-    }
-
-    // Read the original workbench file
-    let content;
     try {
-        content = await fs.readFile(workbenchPath, 'utf8');
-        console.log(`Read workbench file: ${content.length} bytes`);
-    } catch (error) {
-        throw new Error(`Failed to read workbench file: ${error.message}`);
-    }
+        console.log('[Patcher] applyPatches() started');
 
-    // Create backup if it doesn't exist
-    try {
-        await fs.access(backupPath);
-        console.log('Backup already exists');
-    } catch {
-        console.log('Creating backup...');
-        await fs.writeFile(backupPath, content, 'utf8');
-        console.log('Backup created');
-    }
+        console.log('[Patcher] Getting workbench path...');
+        const workbenchPath = getWorkbenchPath();
+        console.log('[Patcher] Got workbench path:', workbenchPath);
 
-    // Read patch files for bootstrap workbench
-    const patchesDir = path.join(__dirname, 'patches');
-    const acpServicePatch = await readPatchFile(path.join(patchesDir, 'acp-service.js'));
-    const modelPatch = await readPatchFile(path.join(patchesDir, 'model-patch.js'));
-    const extensionBridgePatch = await readPatchFile(path.join(patchesDir, 'extension-bridge.js'));
+        const backupPath = getBackupPath();
+        console.log('[Patcher] Got backup path:', backupPath);
 
-    // Prepend patches to bootstrap workbench
-    const patchedContent = '// ACP Integration - DO NOT EDIT MANUALLY\n' +
-        '(function() {\n' +
-        '  "use strict";\n' +
-        '  console.log("[ACP] Initializing ACP integration patches...");\n' +
-        '\n' +
-        extensionBridgePatch + '\n\n' +
-        acpServicePatch + '\n\n' +
-        modelPatch + '\n' +
-        '  console.log("[ACP] ACP integration patches loaded in bootstrap");\n' +
-        '})();\n' +
-        '\n' +
-        content;
+        console.log('Workbench path:', workbenchPath);
+        console.log('Backup path:', backupPath);
+        
+        
+        // Check if already patched
+        // console.log('[Patcher] Checking if already patched...');
+        // if (await isPatchApplied()) {
+        //     console.log('Patches already applied, skipping...');
+        //     return;
+        // }
+        console.log('[Patcher] Not yet patched, proceeding...');
 
-    // Write patched workbench
-    try {
-        await fs.writeFile(workbenchPath, patchedContent, 'utf8');
-        console.log('Bootstrap workbench patches applied successfully');
-    } catch (error) {
-        // Try to restore backup if write failed
+        // Read the original workbench file
+        let content;
         try {
-            await fs.writeFile(workbenchPath, content, 'utf8');
-        } catch (restoreError) {
-            console.error('Failed to restore original file:', restoreError);
+            content = await fs.readFile(workbenchPath, 'utf8');
+            console.log(`Read workbench file: ${content.length} bytes`);
+        } catch (error) {
+            throw new Error(`Failed to read workbench file: ${error.message}`);
         }
-        throw new Error(`Failed to write patched workbench: ${error.message}`);
-    }
+        // Create backup if it doesn't exist
+        try {
+            await fs.access(backupPath);
+            console.log('Backup already exists');
+        } catch {
+            console.log('Creating backup...');
+            await fs.writeFile(backupPath, content, 'utf8');
+            console.log('Backup created');
+        }
 
-    // Also patch main workbench with string replacement for model injection
-    await patchMainWorkbench();
+        // Read patch files for bootstrap workbench
+        const patchesDir = path.join(__dirname, 'patches');
+        const acpServicePatch = await readPatchFile(path.join(patchesDir, 'acp-service.js'));
+        const modelPatch = await readPatchFile(path.join(patchesDir, 'model-patch.js'));
+        const extensionBridgePatch = await readPatchFile(path.join(patchesDir, 'extension-bridge.js'));
+
+        // Prepend patches to bootstrap workbench
+        const patchedContent = '// ACP Integration - DO NOT EDIT MANUALLY\n' +
+            '(function() {\n' +
+            '  "use strict";\n' +
+            '  console.log("[ACP] Initializing ACP integration patches...");\n' +
+            '\n' +
+            extensionBridgePatch + '\n\n' +
+            acpServicePatch + '\n\n' +
+            modelPatch + '\n' +
+            '  console.log("[ACP] ACP integration patches loaded in bootstrap");\n' +
+            '})();\n' +
+            '\n' +
+            content;
+
+        // Write patched workbench
+        try {
+            await fs.writeFile(workbenchPath, patchedContent, 'utf8');
+            console.log('[Patcher] Bootstrap workbench patches applied successfully');
+        } catch (error) {
+            // Try to restore backup if write failed
+            try {
+                await fs.writeFile(workbenchPath, content, 'utf8');
+            } catch (restoreError) {
+                console.error('Failed to restore original file:', restoreError);
+            }
+            throw new Error(`Failed to write patched workbench: ${error.message}`);
+        }
+
+        // Also patch main workbench with string replacement for model injection
+        console.log('[Patcher] Calling patchMainWorkbench()...');
+        await patchMainWorkbench();
+        console.log('[Patcher] applyPatches() completed successfully');
+    } catch (error) {
+        console.error('[Patcher] applyPatches() failed:', error);
+        throw error;
+    }
 }
 
 // Patch the main workbench file to inject ACP routing directly into submitChatMaybeAbortCurrent
 async function patchMainWorkbench() {
-    const mainWorkbenchPath = getMainWorkbenchPath();
-    const mainBackupPath = getMainBackupPath();
-
-    console.log('Main workbench path:', mainWorkbenchPath);
-    console.log('Main backup path:', mainBackupPath);
-
-    // Read main workbench
-    let mainContent;
     try {
-        mainContent = await fs.readFile(mainWorkbenchPath, 'utf8');
-        console.log(`Read main workbench file: ${mainContent.length} bytes`);
-    } catch (error) {
-        throw new Error(`Failed to read main workbench file: ${error.message}`);
-    }
+        const mainWorkbenchPath = getMainWorkbenchPath();
+        const mainBackupPath = getMainBackupPath();
 
-    // Check if already patched
-    if (mainContent.includes('/* ACP CHAT INTERCEPTION */')) {
-        console.log('Main workbench already patched, skipping...');
-        return;
-    }
+        console.log('Main workbench path:', mainWorkbenchPath);
+        console.log('Main backup path:', mainBackupPath);
 
-    // Create backup
-    try {
-        await fs.access(mainBackupPath);
-        console.log('Main workbench backup already exists');
-    } catch {
-        console.log('Creating main workbench backup...');
-        await fs.writeFile(mainBackupPath, mainContent, 'utf8');
-        console.log('Main workbench backup created');
-    }
+        // Read main workbench
+        let mainContent;
+        try {
+            mainContent = await fs.readFile(mainWorkbenchPath, 'utf8');
+            console.log(`Read main workbench file: ${mainContent.length} bytes`);
+        } catch (error) {
+            throw new Error(`Failed to read main workbench file: ${error.message}`);
+        }
+
+        // Check if already patched
+        if (mainContent.includes('/* ACP CHAT INTERCEPTION */')) {
+            console.log('Main workbench already patched, skipping...');
+            return;
+        }
+
+        // Create backup
+        try {
+            await fs.access(mainBackupPath);
+            console.log('Main workbench backup already exists');
+        } catch {
+            console.log('Creating main workbench backup...');
+            await fs.writeFile(mainBackupPath, mainContent, 'utf8');
+            console.log('Main workbench backup created');
+        }
 
     // Find and patch submitChatMaybeAbortCurrent function
-    // Pattern: async submitChatMaybeAbortCurrent(e,t,n,s=yj){let r=ss();s.setAttribute("requestId",r);
-    const searchPattern = 'async submitChatMaybeAbortCurrent(e,t,n,s=yj){let r=ss();s.setAttribute("requestId",r);';
+    // Use regex to handle different minified variable names across platforms
+    console.log('[Patcher] Searching for submitChatMaybeAbortCurrent pattern...');
+    const searchRegex = /async submitChatMaybeAbortCurrent\((\w),(\w),(\w),(\w)=(\w+)\)\{let (\w)=(\w+)\(\);\4\.setAttribute\("requestId",\6\);/;
+    const match = mainContent.match(searchRegex);
 
-    const acpInterceptionCode = `async submitChatMaybeAbortCurrent(e, t, n, s = yj) {
-      let r = ss();
-      s.setAttribute("requestId", r);
+    if (!match) {
+        console.warn('⚠️  Could not find submitChatMaybeAbortCurrent pattern with regex');
+        console.warn('⚠️  Cursor version may have changed - ACP interception will NOT work');
+    } else {
+        console.log('Found submitChatMaybeAbortCurrent with variables:', match.slice(1, 8).join(', '));
+        // Extract the captured variable names
+        const [, e, t, n, s, defaultVal, r, ssFunc] = match;
+        const searchPattern = match[0];
+
+        const acpInterceptionCode = `async submitChatMaybeAbortCurrent(${e}, ${t}, ${n}, ${s} = ${defaultVal}) {
+      let ${r} = ${ssFunc}();
+      ${s}.setAttribute("requestId", ${r});
 
       /* === ACP CHAT INTERCEPTION === */
-      // Get the model name first
-      const composerHandle = this._composerDataService.getWeakHandleOptimistic(e);
-      const modelName = n?.modelOverride || composerHandle?.data?.modelConfig?.modelName || '';
+      const composerHandle = this._composerDataService.getWeakHandleOptimistic(${e});
+      const modelName = ${n}?.modelOverride || composerHandle?.data?.modelConfig?.modelName || '';
 
-      // Only route to ACP if model starts with "acp:"
       if (modelName.startsWith('acp:')) {
         console.log('[ACP] 🎯 Intercepting message for ACP model:', modelName);
 
@@ -165,36 +207,32 @@ async function patchMainWorkbench() {
             throw new Error('No composer handle');
           }
 
-          const shouldClearText = !n?.isResume && !n?.skipClearInput && !n?.bubbleId;
+          const shouldClearText = !${n}?.isResume && !${n}?.skipClearInput && !${n}?.bubbleId;
 
-          // Create and add human message bubble
           const humanBubble = {
-            bubbleId: ss(),
+            bubbleId: ${ssFunc}(),
             type: 1,
-            text: t || '',
-            richText: n?.richText ?? t,
+            text: ${t} || '',
+            richText: ${n}?.richText ?? ${t},
             codeBlocks: [],
             createdAt: new Date().toISOString(),
-            requestId: r,
+            requestId: ${r},
             modelInfo: { modelName: modelName || '' }
           };
           this._composerDataService.appendComposerBubbles(composerHandle, [humanBubble]);
 
-          // Clear input and refocus
-          shouldClearText && this._composerUtilsService.clearText(e);
-          n?.skipFocusAfterSubmission || this._composerViewsService.focus(e, !0);
+          shouldClearText && this._composerUtilsService.clearText(${e});
+          ${n}?.skipFocusAfterSubmission || this._composerViewsService.focus(${e}, !0);
 
-          // Set status to generating
-          const aiBubbleId = ss();
-          this._composerDataService.updateComposerDataSetStore(e, o => {
+          const aiBubbleId = ${ssFunc}();
+          this._composerDataService.updateComposerDataSetStore(${e}, o => {
             o("status", "generating");
             o("generatingBubbleIds", [aiBubbleId]);
             o("currentBubbleId", void 0);
             o("isDraft", !1);
           });
 
-          // Call ACP service
-          const acpMessages = [{ role: 'user', content: t || '' }];
+          const acpMessages = [{ role: 'user', content: ${t} || '' }];
           const acpResponse = await window.acpService.handleRequest(modelName, acpMessages);
 
           if (acpResponse.error) {
@@ -203,7 +241,6 @@ async function patchMainWorkbench() {
 
           const responseText = acpResponse.choices?.[0]?.message?.content || '[No response]';
 
-          // Create and add AI response bubble
           const aiBubble = {
             bubbleId: aiBubbleId,
             type: 2,
@@ -214,8 +251,7 @@ async function patchMainWorkbench() {
           };
           this._composerDataService.appendComposerBubbles(composerHandle, [aiBubble]);
 
-          // Set status to completed
-          this._composerDataService.updateComposerDataSetStore(e, o => {
+          this._composerDataService.updateComposerDataSetStore(${e}, o => {
             o("status", "completed");
             o("generatingBubbleIds", []);
             o("chatGenerationUUID", void 0);
@@ -226,28 +262,68 @@ async function patchMainWorkbench() {
 
         } catch (acpError) {
           console.error('[ACP] ❌ Error:', acpError);
-          this._composerDataService.updateComposerDataSetStore(e, o => o("status", "aborted"));
+          this._composerDataService.updateComposerDataSetStore(${e}, o => o("status", "aborted"));
           throw acpError;
         }
       }
 
-      // Not an ACP model - continue with normal Cursor flow
       console.log('[ACP] 🔵 Normal Cursor model, using standard flow:', modelName);
       `;
 
-    if (mainContent.includes(searchPattern)) {
-        console.log('Found submitChatMaybeAbortCurrent, applying ACP patch...');
+        console.log('Applying ACP interception patch...');
         mainContent = mainContent.replace(searchPattern, acpInterceptionCode);
+    }
 
+    // === PATCH: Inject ACP model into getAvailableDefaultModels getter ===
+    // The getter returns: e.length===0?[...XX]:e  (where XX is the fallback array variable)
+    // We patch it to always prepend ACP model to the returned array
+    console.log('[Patcher] Searching for model getter pattern...');
+    const acpModelDef = '{defaultOn:!0,name:"acp:claude-code",clientDisplayName:"Claude Code (ACP)",serverModelName:"acp:claude-code",supportsAgent:!0,supportsMaxMode:!0,supportsNonMaxMode:!0,supportsThinking:!0,supportsImages:!1,isRecommendedForBackgroundComposer:!1,inputboxShortModelName:"Claude Code"}';
+
+    // Use regex to find the pattern with any variable names
+    const getterRegex = /\.length===0\?\[\.\.\.(\w+)\]:(\w)\}/;
+    const getterMatch = mainContent.match(getterRegex);
+
+    if (getterMatch) {
+        const [fullMatch, fallbackVar, returnVar] = getterMatch;
+        console.log(`Found getAvailableDefaultModels getter with vars: fallback=${fallbackVar}, return=${returnVar}`);
+        const getterReplace = `.length===0?[${acpModelDef},...${fallbackVar}]:[${acpModelDef},...${returnVar}]}`;
+        mainContent = mainContent.replace(fullMatch, getterReplace);
+        console.log('✅ ACP model will be injected into model list');
+    } else {
+        console.warn('⚠️  Could not find getter pattern with regex');
+    }
+
+    // === PATCH: Add Agents section template (for future use) ===
+    // Note: The ACP model will appear in the regular model list for now.
+    // A separate "Agents" section UI can be added in a future enhancement.
+    const templateSearch = 'nBf=be("<div class=settings-menu-hoverable><div></div><div>API Keys")';
+    const templateReplace = 'nBf=be("<div class=settings-menu-hoverable><div></div><div>API Keys"),acpAgentsBf=be("<div class=settings-menu-hoverable><div></div><div>Agents")';
+
+    if (mainContent.includes(templateSearch)) {
+        console.log('Found API Keys template, adding Agents section template...');
+        mainContent = mainContent.replace(templateSearch, templateReplace);
+        console.log('✅ Agents section template added (for future use)');
+    } else {
+        console.warn('⚠️  Could not find API Keys template pattern');
+        console.warn('⚠️  Agents section template not added');
+    }
+
+    console.log('ℹ️  Note: Claude Code (ACP) will appear in the regular model list');
+
+        // Write all patches
+        console.log('[Patcher] Writing patched content to file...');
         try {
             await fs.writeFile(mainWorkbenchPath, mainContent, 'utf8');
-            console.log('Main workbench patched successfully - ACP will intercept chat submissions');
+            console.log('✅ Main workbench patched successfully');
         } catch (error) {
+            console.error('[Patcher] Write failed:', error);
             throw new Error(`Failed to write patched main workbench: ${error.message}`);
         }
-    } else {
-        console.warn('⚠️  Could not find submitChatMaybeAbortCurrent pattern');
-        console.warn('⚠️  Cursor version may have changed - ACP interception will NOT work');
+        console.log('[Patcher] patchMainWorkbench() completed');
+    } catch (error) {
+        console.error('[Patcher] patchMainWorkbench() failed:', error);
+        throw error;
     }
 }
 
