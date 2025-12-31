@@ -17,9 +17,6 @@ describe('E2E: Cursor ACP Extension', () => {
     // Wait for app to initialize
     await cursor.sleep(3000);
 
-    // Dismiss any onboarding screens
-    await cursor.dismissOnboarding();
-
     // Wait for extension to fully activate before enabling ACP
     console.log('[Test] Waiting for extension to activate...');
     await cursor.sleep(5000);
