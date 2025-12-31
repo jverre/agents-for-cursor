@@ -6,7 +6,6 @@ module.exports = {
   collectCoverageFrom: [
     'extension.js',
     'patcher.js',
-    'checksum-fixer.js',
     'patches/**/*.js'
   ],
   coverageDirectory: 'coverage',

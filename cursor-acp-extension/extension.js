@@ -1,6 +1,5 @@
 const vscode = require('vscode');
 const patcher = require('./patcher');
-const checksumFixer = require('./checksum-fixer');
 const { spawn } = require('child_process');
 const { createInterface } = require('readline');
 const http = require('http');
@@ -363,10 +362,6 @@ function activate(context) {
             // Apply patches
             await patcher.applyPatches();
 
-            // Fix checksums to prevent corruption warnings
-            // TODO: Temporarily commented out to test if this is causing the hang
-            // await checksumFixer.fixChecksums();
-
             vscode.window.showInformationMessage(
                 'ACP integration enabled! Please restart Cursor for changes to take effect.',
                 'Restart Now'
@@ -388,9 +383,6 @@ function activate(context) {
 
             // Remove patches
             await patcher.removePatches();
-
-            // Restore original checksums
-            // await checksumFixer.restoreChecksums();
 
             vscode.window.showInformationMessage(
                 'ACP integration disabled! Please restart Cursor for changes to take effect.',
@@ -416,9 +408,6 @@ function activate(context) {
 
             // Reapply patches
             await patcher.applyPatches();
-
-            // Fix checksums
-            await checksumFixer.fixChecksums();
 
             vscode.window.showInformationMessage(
                 'ACP integration reloaded! Please restart Cursor for changes to take effect.',
