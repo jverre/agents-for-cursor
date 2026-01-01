@@ -43,18 +43,13 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
             o("isDraft", !1);
           });
 
-          // Extract full conversation from Cursor's bubble array
-          const existingBubbles = composerHandle?.data?.bubbles || [];
-          const fullConversation = existingBubbles.map(bubble => ({
-            role: bubble.type === 1 ? 'user' : 'assistant',
-            content: bubble.text || bubble.richText || ''
-          }));
+          // Use composer ID for session management, send only current message
+          // The ACP agent maintains conversation history internally per session
+          const composerId = {{e}};
+          const currentMessage = {{t}} || '';
 
-          // Add current message (not yet in bubbles)
-          fullConversation.push({ role: 'user', content: {{t}} || '' });
-
-          console.log('[ACP] Sending conversation with', fullConversation.length, 'messages');
-          const acpResponse = await window.acpService.handleRequest(modelName, fullConversation);
+          console.log('[ACP] Sending message to session for composer:', composerId);
+          const acpResponse = await window.acpService.handleRequest(modelName, currentMessage, composerId);
 
           if (acpResponse.error) {
             throw new Error(acpResponse.message || 'ACP error');
