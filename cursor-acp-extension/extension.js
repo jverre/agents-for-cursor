@@ -5,6 +5,18 @@ const { createInterface } = require('readline');
 const http = require('http');
 
 /**
+ * Get the current workspace folder path
+ */
+function getWorkspacePath() {
+    const folders = vscode.workspace.workspaceFolders;
+    if (folders && folders.length > 0) {
+        return folders[0].uri.fsPath;
+    }
+    // Fallback to process.cwd() if no workspace is open
+    return process.cwd();
+}
+
+/**
  * ACP Agent Manager - Handles subprocess lifecycle and JSON-RPC communication
  */
 class ACPAgentManager {
@@ -23,8 +35,10 @@ class ACPAgentManager {
             return this.agents.get(provider.id);
         }
 
+        const workspacePath = getWorkspacePath();
         const proc = spawn(provider.command, provider.args || [], {
             stdio: ['pipe', 'pipe', 'pipe'],
+            cwd: workspacePath,
             env: { ...process.env, ...provider.env }
         });
 
@@ -136,7 +150,7 @@ class ACPAgentManager {
      */
     async createSession(agent, provider) {
         const result = await this.sendRequest(agent, 'session/new', {
-            cwd: process.cwd(),
+            cwd: getWorkspacePath(),
             mcpServers: []
         });
 
@@ -159,7 +173,7 @@ class ACPAgentManager {
         } else {
             // Create new session for this composer
             const sessionResult = await this.sendRequest(agent, 'session/new', {
-                cwd: process.cwd(),
+                cwd: getWorkspacePath(),
                 mcpServers: []
             });
             sessionId = sessionResult.sessionId;
@@ -286,7 +300,7 @@ async function activate(context) {
 
                     // Create a session to trigger available_commands_update
                     const sessionResult = await agentManager.sendRequest(agent, 'session/new', {
-                        cwd: process.cwd(),
+                        cwd: getWorkspacePath(),
                         mcpServers: []
                     });
 
