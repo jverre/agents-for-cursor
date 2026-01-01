@@ -179,8 +179,43 @@ class ACPAgentManager {
 /**
  * @param {vscode.ExtensionContext} context
  */
-function activate(context) {
+async function activate(context) {
     const agentManager = new ACPAgentManager();
+
+    // First-run detection and auto-patching
+    const firstRun = context.globalState.get('firstRun');
+    const patchesApplied = await patcher.isPatchApplied();
+
+    if (firstRun === undefined) {
+        // First install - automatically enable patches
+        context.globalState.update('firstRun', false);
+
+        if (!patchesApplied) {
+            try {
+                await patcher.applyPatches();
+                vscode.window.showInformationMessage(
+                    'ACP integration enabled! Please restart Cursor to activate.',
+                    'Restart Now'
+                ).then(selection => {
+                    if (selection === 'Restart Now') {
+                        vscode.commands.executeCommand('workbench.action.reloadWindow');
+                    }
+                });
+            } catch (error) {
+                vscode.window.showErrorMessage(`Failed to enable ACP: ${error.message}`);
+            }
+        }
+    } else if (!patchesApplied) {
+        // Not first run, but patches are missing (Cursor update?)
+        vscode.window.showInformationMessage(
+            'ACP patches need to be reapplied (Cursor may have been updated). Run "ACP: Enable" to activate.',
+            'Enable Now'
+        ).then(selection => {
+            if (selection === 'Enable Now') {
+                vscode.commands.executeCommand('acp.enable');
+            }
+        });
+    }
 
     // Create HTTP server for renderer-to-extension communication
     const server = http.createServer(async (req, res) => {
