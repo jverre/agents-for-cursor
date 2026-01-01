@@ -137,7 +137,8 @@ async function patchMainWorkbench() {
         }
 
         // Find and patch submitChatMaybeAbortCurrent function
-        const searchRegex = /async submitChatMaybeAbortCurrent\((\w),(\w),(\w),(\w)=(\w+)\)\{let (\w)=(\w+)\(\);\4\.setAttribute\("requestId",\6\);/;
+        // Note: \s* allows for spaces and newlines in formatted/minified code
+        const searchRegex = /async submitChatMaybeAbortCurrent\((\w),\s*(\w),\s*(\w),\s*(\w)\s*=\s*(\w+)\)\s*\{\s*let\s+(\w)\s*=\s*(\w+)\(\);?\s*\4\.setAttribute\(\s*"requestId"\s*,\s*\6\s*\);/;
         const match = mainContent.match(searchRegex);
 
         if (!match) {
