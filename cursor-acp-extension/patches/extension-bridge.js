@@ -6,8 +6,8 @@ try {
   // Extension will run a local server on port 37842
 
   window.acpExtensionBridge = {
-    async sendMessage(provider, messages) {
-      console.log('[ACP Bridge] sendMessage called with provider:', provider.id);
+    async sendMessage(provider, message, composerId) {
+      console.log('[ACP Bridge] sendMessage called with provider:', provider.id, 'composerId:', composerId);
 
       try {
         const response = await fetch('http://localhost:37842/acp/sendMessage', {
@@ -17,7 +17,8 @@ try {
           },
           body: JSON.stringify({
             provider: provider,
-            messages: messages
+            message: message,
+            composerId: composerId
           })
         });
 

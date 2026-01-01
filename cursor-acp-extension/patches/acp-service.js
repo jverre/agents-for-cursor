@@ -46,9 +46,9 @@ try {
     }
 
     // Handle ACP request (called from chat-patch.js)
-    async handleRequest(modelName, messages) {
-      console.log('[ACP] Handling request for model:', modelName);
-      console.log('[ACP] Messages:', messages);
+    async handleRequest(modelName, message, composerId) {
+      console.log('[ACP] Handling request for model:', modelName, 'composerId:', composerId);
+      console.log('[ACP] Message:', message);
 
       // Extract provider ID from model name
       // "Claude Code (ACP)" -> "claude-code"
@@ -71,7 +71,7 @@ try {
         // Check if extension bridge is available
         if (window.acpExtensionBridge && window.acpExtensionBridge.sendMessage) {
           console.log('[ACP] Extension bridge found, calling sendMessage...');
-          const response = await window.acpExtensionBridge.sendMessage(provider, messages);
+          const response = await window.acpExtensionBridge.sendMessage(provider, message, composerId);
           console.log('[ACP] Got response from extension:', response);
           return response;
         } else {
@@ -87,7 +87,7 @@ try {
               index: 0,
               message: {
                 role: 'assistant',
-                content: `[ACP Mock Response]\n\nProvider: ${provider.displayName}\nCommand: ${provider.command} ${provider.args?.join(' ')}\n\nYour message: "${messages[messages.length - 1]?.content || 'unknown'}"\n\nNote: Extension bridge not available. Make sure the extension is loaded.`
+                content: `[ACP Mock Response]\n\nProvider: ${provider.displayName}\nCommand: ${provider.command} ${provider.args?.join(' ')}\n\nYour message: "${message}"\n\nNote: Extension bridge not available. Make sure the extension is loaded.`
               },
               finish_reason: 'stop'
             }],

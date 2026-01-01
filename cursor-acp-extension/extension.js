@@ -10,6 +10,7 @@ const http = require('http');
 class ACPAgentManager {
     constructor() {
         this.agents = new Map(); // Map<providerId, AgentProcess>
+        this.sessions = new Map(); // Map<composerId, { sessionId, providerId }>
         this.nextMessageId = 1;
     }
 
@@ -71,8 +72,7 @@ class ACPAgentManager {
         // Initialize the agent
         await this.initialize(agent);
 
-        // Create session
-        await this.createSession(agent, provider);
+        // Note: Session creation moved to sendPrompt() - we create a new session for each message
 
         return agent;
     }
@@ -133,12 +133,30 @@ class ACPAgentManager {
 
     /**
      * Send prompt to ACP agent
+     * Uses persistent sessions per composer - agent maintains conversation history
      */
-    async sendPrompt(agent, messages) {
-        const lastMessage = messages[messages.length - 1];
+    async sendPrompt(agent, message, composerId) {
+        // Get or create session for this composer
+        let sessionId;
+        const existingSession = this.sessions.get(composerId);
+
+        if (existingSession && existingSession.providerId === agent.providerId) {
+            sessionId = existingSession.sessionId;
+            console.log(`[ACP] Reusing session ${sessionId} for composer ${composerId}`);
+        } else {
+            // Create new session for this composer
+            const sessionResult = await this.sendRequest(agent, 'session/new', {
+                cwd: process.cwd(),
+                mcpServers: []
+            });
+            sessionId = sessionResult.sessionId;
+            this.sessions.set(composerId, { sessionId, providerId: agent.providerId });
+            console.log(`[ACP] Created new session ${sessionId} for composer ${composerId}`);
+        }
+
         const responseChunks = [];
 
-        // Set up temporary listener for session/update
+        // Set up listener for response chunks
         agent.sessionUpdateListener = (params) => {
             if (params.update?.sessionUpdate === 'agent_message_chunk') {
                 const content = params.update.content;
@@ -148,17 +166,18 @@ class ACPAgentManager {
             }
         };
 
-        // Use session/prompt per ACP protocol spec
+        // Send only the current message
         const result = await this.sendRequest(agent, 'session/prompt', {
-            sessionId: agent.sessionId,
+            sessionId: sessionId,
             prompt: [{
                 type: 'text',
-                text: lastMessage.content
+                text: message
             }]
         });
 
         delete agent.sessionUpdateListener;
 
+        console.log(`[ACP] Prompt complete for session ${sessionId}`);
         return {
             text: responseChunks.join(''),
             stopReason: result.stopReason
@@ -236,9 +255,9 @@ async function activate(context) {
 
             req.on('end', async () => {
                 try {
-                    const { provider, messages } = JSON.parse(body);
+                    const { provider, message, composerId } = JSON.parse(body);
                     const agent = await agentManager.spawnAgent(provider);
-                    const response = await agentManager.sendPrompt(agent, messages);
+                    const response = await agentManager.sendPrompt(agent, message, composerId);
 
                     const result = {
                         id: `acp-${Date.now()}`,
@@ -329,10 +348,10 @@ async function activate(context) {
         }
     });
 
-    let sendMessageCommand = vscode.commands.registerCommand('acp.sendMessage', async (provider, messages) => {
+    let sendMessageCommand = vscode.commands.registerCommand('acp.sendMessage', async (provider, message, composerId) => {
         try {
             const agent = await agentManager.spawnAgent(provider);
-            const response = await agentManager.sendPrompt(agent, messages);
+            const response = await agentManager.sendPrompt(agent, message, composerId);
 
             return {
                 id: `acp-${Date.now()}`,

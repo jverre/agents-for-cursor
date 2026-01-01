@@ -43,8 +43,13 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
             o("isDraft", !1);
           });
 
-          const acpMessages = [{ role: 'user', content: {{t}} || '' }];
-          const acpResponse = await window.acpService.handleRequest(modelName, acpMessages);
+          // Use composer ID for session management, send only current message
+          // The ACP agent maintains conversation history internally per session
+          const composerId = {{e}};
+          const currentMessage = {{t}} || '';
+
+          console.log('[ACP] Sending message to session for composer:', composerId);
+          const acpResponse = await window.acpService.handleRequest(modelName, currentMessage, composerId);
 
           if (acpResponse.error) {
             throw new Error(acpResponse.message || 'ACP error');

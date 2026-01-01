@@ -31,6 +31,9 @@ describe('E2E: Claude Code (ACP) Model', () => {
     await cursor.selectModel('Claude Code (ACP)', 'acp-03');
     await cursor.screenshot('acp-04-acp-model-selected.png');
 
+    // Wait for extension HTTP server to be ready
+    await cursor.sleep(5000);
+
     await cursor.sendChatMessage('Who are you ?');
     await cursor.screenshot('acp-05-message-sent.png');
 
