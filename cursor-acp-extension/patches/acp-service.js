@@ -6,6 +6,7 @@ try {
     constructor() {
       this.providers = new Map();
       this.sessions = new Map();
+      this.slashCommands = new Map(); // Map<providerId, AvailableCommand[]>
       console.log("[ACP] ACPService initialized");
 
       // Add test provider (will load from config file later)
@@ -33,6 +34,7 @@ try {
 
       this.providers.set('claude-code', testProvider);
       console.log("[ACP] Added test provider:", testProvider.id);
+      // Note: Slash commands are lazy-loaded when user types '/' in composer
     }
 
     // Get all providers
@@ -43,6 +45,52 @@ try {
     // Get provider by ID
     getProvider(providerId) {
       return this.providers.get(providerId);
+    }
+
+    // Initialize session and fetch slash commands from extension backend
+    async initSession(providerId) {
+      const provider = this.getProvider(providerId);
+      if (!provider) {
+        console.error('[ACP] No provider found for:', providerId);
+        return [];
+      }
+
+      if (window.acpExtensionBridge && window.acpExtensionBridge.initSession) {
+        try {
+          console.log('[ACP] Initializing session for:', providerId);
+          const result = await window.acpExtensionBridge.initSession(provider);
+          if (result.commands) {
+            this.slashCommands.set(providerId, result.commands);
+            console.log('[ACP] Got slash commands from init:', result.commands.length);
+          }
+          return result.commands || [];
+        } catch (error) {
+          console.error('[ACP] Error initializing session:', error);
+          return [];
+        }
+      }
+      return [];
+    }
+
+    // Fetch slash commands from extension backend (cached)
+    async fetchSlashCommands(providerId) {
+      if (window.acpExtensionBridge && window.acpExtensionBridge.getSlashCommands) {
+        try {
+          const commands = await window.acpExtensionBridge.getSlashCommands(providerId);
+          this.slashCommands.set(providerId, commands);
+          console.log('[ACP] Fetched slash commands for', providerId, ':', commands.length, 'commands');
+          return commands;
+        } catch (error) {
+          console.error('[ACP] Error fetching slash commands:', error);
+          return [];
+        }
+      }
+      return [];
+    }
+
+    // Get cached slash commands for a provider
+    getSlashCommands(providerId) {
+      return this.slashCommands.get(providerId) || [];
     }
 
     // Handle ACP request (called from chat-patch.js)

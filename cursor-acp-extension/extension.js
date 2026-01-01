@@ -11,6 +11,7 @@ class ACPAgentManager {
     constructor() {
         this.agents = new Map(); // Map<providerId, AgentProcess>
         this.sessions = new Map(); // Map<composerId, { sessionId, providerId }>
+        this.slashCommands = new Map(); // Map<providerId, AvailableCommand[]>
         this.nextMessageId = 1;
     }
 
@@ -54,8 +55,20 @@ class ACPAgentManager {
                 }
 
                 // Handle notification (session/update)
-                if (message.method === 'session/update' && agent.sessionUpdateListener) {
-                    agent.sessionUpdateListener(message.params);
+                if (message.method === 'session/update') {
+                    const update = message.params?.update;
+
+                    // Handle available_commands_update - cache slash commands
+                    if (update?.sessionUpdate === 'available_commands_update') {
+                        agent.slashCommands = update.availableCommands || [];
+                        this.slashCommands.set(agent.providerId, agent.slashCommands);
+                        console.log('[ACP] Received slash commands:', agent.slashCommands.length, 'commands for', agent.providerId);
+                    }
+
+                    // Forward to listener for other updates (agent_message_chunk, etc.)
+                    if (agent.sessionUpdateListener) {
+                        agent.sessionUpdateListener(message.params);
+                    }
                 }
             } catch (error) {
                 console.error('[ACP] Failed to parse message:', error);
@@ -240,12 +253,62 @@ async function activate(context) {
     const server = http.createServer(async (req, res) => {
         // Enable CORS
         res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
         if (req.method === 'OPTIONS') {
             res.writeHead(200);
             res.end();
+            return;
+        }
+
+        // GET /acp/getSlashCommands - return cached slash commands for a provider
+        if (req.method === 'GET' && req.url.startsWith('/acp/getSlashCommands')) {
+            const url = new URL(req.url, 'http://localhost');
+            const providerId = url.searchParams.get('providerId');
+            const commands = agentManager.slashCommands.get(providerId) || [];
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(commands));
+            return;
+        }
+
+        // POST /acp/initSession - initialize a session to fetch slash commands
+        if (req.method === 'POST' && req.url === '/acp/initSession') {
+            let body = '';
+            req.on('data', chunk => { body += chunk.toString(); });
+
+            req.on('end', async () => {
+                try {
+                    const { provider } = JSON.parse(body);
+                    console.log('[ACP] Initializing session for slash commands, provider:', provider.id);
+
+                    const agent = await agentManager.spawnAgent(provider);
+
+                    // Create a session to trigger available_commands_update
+                    const sessionResult = await agentManager.sendRequest(agent, 'session/new', {
+                        cwd: process.cwd(),
+                        mcpServers: []
+                    });
+
+                    console.log('[ACP] Session created:', sessionResult.sessionId);
+
+                    // Wait a bit for the agent to send available_commands_update
+                    await new Promise(resolve => setTimeout(resolve, 500));
+
+                    const commands = agentManager.slashCommands.get(provider.id) || [];
+                    console.log('[ACP] Slash commands after init:', commands.length);
+
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({
+                        sessionId: sessionResult.sessionId,
+                        commands: commands
+                    }));
+                } catch (error) {
+                    console.error('[ACP] Error initializing session:', error);
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: true, message: error.message }));
+                }
+            });
             return;
         }
 

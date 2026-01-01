@@ -1,0 +1,18 @@
+{
+  "acpModelDef": "{defaultOn:!0,name:\"acp:claude-code\",clientDisplayName:\"Claude Code (ACP)\",serverModelName:\"acp:claude-code\",supportsAgent:!0,supportsMaxMode:!0,supportsNonMaxMode:!0,supportsThinking:!0,supportsImages:!1,isRecommendedForBackgroundComposer:!1,inputboxShortModelName:\"Claude Code\"}",
+
+  "templateSearch": "nBf=be(\"<div class=settings-menu-hoverable><div></div><div>API Keys\")",
+  "templateReplace": "nBf=be(\"<div class=settings-menu-hoverable><div></div><div>API Keys\"),acpAgentsBf=be(\"<div class=settings-menu-hoverable><div></div><div>Agents\")",
+
+  "cursorCommandsSearch": "getCommands(){const i=new Map;for(const e of this._commands.keys()){const t=this.getCommand(e);t&&i.set(e,t)}return i}",
+  "cursorCommandsLoopBody": "for(const e of this._commands.keys()){const t=this.getCommand(e);t&&i.set(e,t)}",
+
+  "chatSlashSearch": "getCommands(e,t){return Array.from(this._commands.values(),n=>n.data).filter(n=>n.locations.includes(e)&&(!n.modes||n.modes.includes(t)))}",
+  "chatSlashOriginalBody": "Array.from(this._commands.values(),n=>n.data).filter(n=>n.locations.includes(e)&&(!n.modes||n.modes.includes(t)))",
+
+  "asyncCursorCmdsSearch": "async getCommands(){return await this.initialize(),Array.from(this.commands.values())}",
+  "asyncCursorCmdsOriginalBody": "(await this.initialize(),Array.from(this.commands.values()))",
+
+  "dropdownCallSearch": "const g=await h.cursorCommandsService.getCommands()",
+  "dropdownCallReplace": "const g=(await h.cursorCommandsService.getCommands()).filter(_c=>!_c.isACP||i.props?.composerDataHandle?.data?.modelConfig?.modelName?.startsWith(\"acp:\"))"
+}
