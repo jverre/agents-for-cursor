@@ -235,8 +235,9 @@ class CursorAutomation {
   async hasTextInDropdown(text, timeout = 5000) {
     try {
       // Wait for dropdown to appear and check for text
+      // The text is in a .monaco-highlighted-label inside .composer-unified-context-menu-item
       const element = await this.mainWindow.waitForSelector(
-        `.composer-dropdown-item:has-text("${text}"), .composer-command-item:has-text("${text}"), [class*="dropdown"]:has-text("${text}"), [class*="autocomplete"]:has-text("${text}")`,
+        `.composer-unified-context-menu-item:has-text("${text}"), .monaco-highlighted-label:has-text("${text}")`,
         { timeout }
       );
       return element !== null;
