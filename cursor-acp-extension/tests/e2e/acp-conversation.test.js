@@ -31,6 +31,9 @@ describe('E2E: Claude Code (ACP) Conversation History', () => {
     await cursor.selectModel('Claude Code (ACP)', 'acp-conv-03');
     await cursor.screenshot('acp-conv-04-acp-selected.png');
 
+    // Wait for extension HTTP server to be ready
+    await cursor.sleep(5000);
+
     // First message: establish context
     console.log('[Test] Sending first message to establish context...');
     await cursor.sendChatMessage('I am Alice');
