@@ -140,7 +140,7 @@ class ACPAgentManager {
         let sessionId;
         const existingSession = this.sessions.get(composerId);
 
-        if (existingSession && existingSession.providerId === agent.provider.id) {
+        if (existingSession && existingSession.providerId === agent.providerId) {
             sessionId = existingSession.sessionId;
             console.log(`[ACP] Reusing session ${sessionId} for composer ${composerId}`);
         } else {
@@ -150,7 +150,7 @@ class ACPAgentManager {
                 mcpServers: []
             });
             sessionId = sessionResult.sessionId;
-            this.sessions.set(composerId, { sessionId, providerId: agent.provider.id });
+            this.sessions.set(composerId, { sessionId, providerId: agent.providerId });
             console.log(`[ACP] Created new session ${sessionId} for composer ${composerId}`);
         }
 
