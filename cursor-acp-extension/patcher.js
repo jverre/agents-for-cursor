@@ -31,10 +31,10 @@ function getMainBackupPath() {
 // Check if patches are already applied
 async function isPatchApplied() {
     try {
-        const workbenchPath = getWorkbenchPath();
-        const content = await fs.readFile(workbenchPath, 'utf8');
-        return content.includes('// ACP Integration');
-    } catch (error) {
+        const content = await fs.readFile(getWorkbenchPath(), 'utf8');
+        const mainContent = await fs.readFile(getMainWorkbenchPath(), 'utf8');
+        return content.includes('// ACP Integration') && mainContent.includes('/* ACP CHAT INTERCEPTION */');
+    } catch {
         return false;
     }
 }
@@ -44,32 +44,13 @@ async function applyPatches() {
     const workbenchPath = getWorkbenchPath();
     const backupPath = getBackupPath();
 
-    console.log('Workbench path:', workbenchPath);
-    console.log('Backup path:', backupPath);
-
-    // Check if already patched
-    if (await isPatchApplied()) {
-        console.log('Patches already applied, skipping...');
-        return;
-    }
-
-    // Read the original workbench file
-    let content;
-    try {
-        content = await fs.readFile(workbenchPath, 'utf8');
-        console.log(`Read workbench file: ${content.length} bytes`);
-    } catch (error) {
-        throw new Error(`Failed to read workbench file: ${error.message}`);
-    }
+    const content = await fs.readFile(workbenchPath, 'utf8');
 
     // Create backup if it doesn't exist
     try {
         await fs.access(backupPath);
-        console.log('Backup already exists');
     } catch {
-        console.log('Creating backup...');
         await fs.writeFile(backupPath, content, 'utf8');
-        console.log('Backup created');
     }
 
     // Read patch files for bootstrap workbench
@@ -82,31 +63,15 @@ async function applyPatches() {
     const patchedContent = '// ACP Integration - DO NOT EDIT MANUALLY\n' +
         '(function() {\n' +
         '  "use strict";\n' +
-        '  console.log("[ACP] Initializing ACP integration patches...");\n' +
         '\n' +
         extensionBridgePatch + '\n\n' +
         acpServicePatch + '\n\n' +
         modelPatch + '\n' +
-        '  console.log("[ACP] ACP integration patches loaded in bootstrap");\n' +
         '})();\n' +
         '\n' +
         content;
 
-    // Write patched workbench
-    try {
-        await fs.writeFile(workbenchPath, patchedContent, 'utf8');
-        console.log('Bootstrap workbench patches applied successfully');
-    } catch (error) {
-        // Try to restore backup if write failed
-        try {
-            await fs.writeFile(workbenchPath, content, 'utf8');
-        } catch (restoreError) {
-            console.error('Failed to restore original file:', restoreError);
-        }
-        throw new Error(`Failed to write patched workbench: ${error.message}`);
-    }
-
-    // Also patch main workbench with string replacement for model injection
+    await fs.writeFile(workbenchPath, patchedContent, 'utf8');
     await patchMainWorkbench();
 }
 
@@ -115,180 +80,83 @@ async function patchMainWorkbench() {
     const mainWorkbenchPath = getMainWorkbenchPath();
     const mainBackupPath = getMainBackupPath();
 
-    console.log('Main workbench path:', mainWorkbenchPath);
-    console.log('Main backup path:', mainBackupPath);
-
-    // Read main workbench
-    let mainContent;
-    try {
-        mainContent = await fs.readFile(mainWorkbenchPath, 'utf8');
-        console.log(`Read main workbench file: ${mainContent.length} bytes`);
-    } catch (error) {
-        throw new Error(`Failed to read main workbench file: ${error.message}`);
-    }
+    let mainContent = await fs.readFile(mainWorkbenchPath, 'utf8');
 
     // Check if already patched
     if (mainContent.includes('/* ACP CHAT INTERCEPTION */')) {
-        console.log('Main workbench already patched, skipping...');
         return;
     }
 
     // Create backup
     try {
         await fs.access(mainBackupPath);
-        console.log('Main workbench backup already exists');
     } catch {
-        console.log('Creating main workbench backup...');
         await fs.writeFile(mainBackupPath, mainContent, 'utf8');
-        console.log('Main workbench backup created');
     }
 
     // Find and patch submitChatMaybeAbortCurrent function
-    // Pattern: async submitChatMaybeAbortCurrent(e,t,n,s=yj){let r=ss();s.setAttribute("requestId",r);
-    const searchPattern = 'async submitChatMaybeAbortCurrent(e,t,n,s=yj){let r=ss();s.setAttribute("requestId",r);';
+    const searchRegex = /async submitChatMaybeAbortCurrent\((\w),(\w),(\w),(\w)=(\w+)\)\{let (\w)=(\w+)\(\);\4\.setAttribute\("requestId",\6\);/;
+    const match = mainContent.match(searchRegex);
 
-    const acpInterceptionCode = `async submitChatMaybeAbortCurrent(e, t, n, s = yj) {
-      let r = ss();
-      s.setAttribute("requestId", r);
+    if (match) {
+        const [, e, t, n, s, defaultVal, r, ssFunc] = match;
+        const searchPattern = match[0];
 
-      /* === ACP CHAT INTERCEPTION === */
-      // Get the model name first
-      const composerHandle = this._composerDataService.getWeakHandleOptimistic(e);
-      const modelName = n?.modelOverride || composerHandle?.data?.modelConfig?.modelName || '';
+        // Read chat interception template and substitute variables
+        const chatInterceptionTemplate = await readPatchFile(path.join(__dirname, 'patches', 'chat-interception.js'));
+        const acpInterceptionCode = chatInterceptionTemplate
+            .replace(/\{\{e\}\}/g, e)
+            .replace(/\{\{t\}\}/g, t)
+            .replace(/\{\{n\}\}/g, n)
+            .replace(/\{\{s\}\}/g, s)
+            .replace(/\{\{defaultVal\}\}/g, defaultVal)
+            .replace(/\{\{r\}\}/g, r)
+            .replace(/\{\{ssFunc\}\}/g, ssFunc)
+            .trimEnd() + '\n      ';
 
-      // Only route to ACP if model starts with "acp:"
-      if (modelName.startsWith('acp:')) {
-        console.log('[ACP] 🎯 Intercepting message for ACP model:', modelName);
-
-        try {
-          if (!composerHandle) {
-            throw new Error('No composer handle');
-          }
-
-          const shouldClearText = !n?.isResume && !n?.skipClearInput && !n?.bubbleId;
-
-          // Create and add human message bubble
-          const humanBubble = {
-            bubbleId: ss(),
-            type: 1,
-            text: t || '',
-            richText: n?.richText ?? t,
-            codeBlocks: [],
-            createdAt: new Date().toISOString(),
-            requestId: r,
-            modelInfo: { modelName: modelName || '' }
-          };
-          this._composerDataService.appendComposerBubbles(composerHandle, [humanBubble]);
-
-          // Clear input and refocus
-          shouldClearText && this._composerUtilsService.clearText(e);
-          n?.skipFocusAfterSubmission || this._composerViewsService.focus(e, !0);
-
-          // Set status to generating
-          const aiBubbleId = ss();
-          this._composerDataService.updateComposerDataSetStore(e, o => {
-            o("status", "generating");
-            o("generatingBubbleIds", [aiBubbleId]);
-            o("currentBubbleId", void 0);
-            o("isDraft", !1);
-          });
-
-          // Call ACP service
-          const acpMessages = [{ role: 'user', content: t || '' }];
-          const acpResponse = await window.acpService.handleRequest(modelName, acpMessages);
-
-          if (acpResponse.error) {
-            throw new Error(acpResponse.message || 'ACP error');
-          }
-
-          const responseText = acpResponse.choices?.[0]?.message?.content || '[No response]';
-
-          // Create and add AI response bubble
-          const aiBubble = {
-            bubbleId: aiBubbleId,
-            type: 2,
-            text: responseText,
-            codeBlocks: [],
-            richText: responseText,
-            createdAt: new Date().toISOString()
-          };
-          this._composerDataService.appendComposerBubbles(composerHandle, [aiBubble]);
-
-          // Set status to completed
-          this._composerDataService.updateComposerDataSetStore(e, o => {
-            o("status", "completed");
-            o("generatingBubbleIds", []);
-            o("chatGenerationUUID", void 0);
-          });
-
-          console.log('[ACP] ✅ Message handled by ACP');
-          return;
-
-        } catch (acpError) {
-          console.error('[ACP] ❌ Error:', acpError);
-          this._composerDataService.updateComposerDataSetStore(e, o => o("status", "aborted"));
-          throw acpError;
-        }
-      }
-
-      // Not an ACP model - continue with normal Cursor flow
-      console.log('[ACP] 🔵 Normal Cursor model, using standard flow:', modelName);
-      `;
-
-    if (mainContent.includes(searchPattern)) {
-        console.log('Found submitChatMaybeAbortCurrent, applying ACP patch...');
         mainContent = mainContent.replace(searchPattern, acpInterceptionCode);
-
-        try {
-            await fs.writeFile(mainWorkbenchPath, mainContent, 'utf8');
-            console.log('Main workbench patched successfully - ACP will intercept chat submissions');
-        } catch (error) {
-            throw new Error(`Failed to write patched main workbench: ${error.message}`);
-        }
-    } else {
-        console.warn('⚠️  Could not find submitChatMaybeAbortCurrent pattern');
-        console.warn('⚠️  Cursor version may have changed - ACP interception will NOT work');
     }
+
+    // Inject ACP model into getAvailableDefaultModels getter
+    const acpModelDef = '{defaultOn:!0,name:"acp:claude-code",clientDisplayName:"Claude Code (ACP)",serverModelName:"acp:claude-code",supportsAgent:!0,supportsMaxMode:!0,supportsNonMaxMode:!0,supportsThinking:!0,supportsImages:!1,isRecommendedForBackgroundComposer:!1,inputboxShortModelName:"Claude Code"}';
+    const getterRegex = /\.length===0\?\[\.\.\.(\w+)\]:(\w)\}/;
+    const getterMatch = mainContent.match(getterRegex);
+
+    if (getterMatch) {
+        const [fullMatch, fallbackVar, returnVar] = getterMatch;
+        const getterReplace = `.length===0?[${acpModelDef},...${fallbackVar}]:[${acpModelDef},...${returnVar}]}`;
+        mainContent = mainContent.replace(fullMatch, getterReplace);
+    }
+
+    // Add Agents section template (for future use)
+    const templateSearch = 'nBf=be("<div class=settings-menu-hoverable><div></div><div>API Keys")';
+    const templateReplace = 'nBf=be("<div class=settings-menu-hoverable><div></div><div>API Keys"),acpAgentsBf=be("<div class=settings-menu-hoverable><div></div><div>Agents")';
+
+    if (mainContent.includes(templateSearch)) {
+        mainContent = mainContent.replace(templateSearch, templateReplace);
+    }
+
+    await fs.writeFile(mainWorkbenchPath, mainContent, 'utf8');
 }
 
 // Remove patches from workbench files
 async function removePatches() {
-    const workbenchPath = getWorkbenchPath();
-    const backupPath = getBackupPath();
-    const mainWorkbenchPath = getMainWorkbenchPath();
-    const mainBackupPath = getMainBackupPath();
-
-    console.log('Removing patches...');
-
-    // Restore bootstrap workbench
     try {
-        await fs.access(backupPath);
-        const backupContent = await fs.readFile(backupPath, 'utf8');
-        await fs.writeFile(workbenchPath, backupContent, 'utf8');
-        console.log('Bootstrap workbench restored from backup');
-    } catch (error) {
-        console.log('No bootstrap backup found or failed to restore:', error.message);
-    }
+        const backupContent = await fs.readFile(getBackupPath(), 'utf8');
+        await fs.writeFile(getWorkbenchPath(), backupContent, 'utf8');
+    } catch {}
 
-    // Restore main workbench
     try {
-        await fs.access(mainBackupPath);
-        const mainBackupContent = await fs.readFile(mainBackupPath, 'utf8');
-        await fs.writeFile(mainWorkbenchPath, mainBackupContent, 'utf8');
-        console.log('Main workbench restored from backup');
-    } catch (error) {
-        console.log('No main workbench backup found or failed to restore:', error.message);
-    }
+        const mainBackupContent = await fs.readFile(getMainBackupPath(), 'utf8');
+        await fs.writeFile(getMainWorkbenchPath(), mainBackupContent, 'utf8');
+    } catch {}
 }
 
 // Helper to read patch files
 async function readPatchFile(filePath) {
     try {
-        const content = await fs.readFile(filePath, 'utf8');
-        return content;
-    } catch (error) {
-        // If patch file doesn't exist yet, return empty placeholder
-        console.warn(`Patch file not found: ${filePath}, using placeholder`);
+        return await fs.readFile(filePath, 'utf8');
+    } catch {
         return `  // Placeholder for ${path.basename(filePath)}`;
     }
 }

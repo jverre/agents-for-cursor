@@ -18,8 +18,8 @@ try {
         id: 'claude-code',
         displayName: 'Claude Code',
         type: 'stdio',
-        command: 'claude-code-acp',  // Real Claude Code ACP server
-        args: [],
+        command: 'npx',  // Use npx to auto-install claude-code-acp
+        args: ['--yes', '@zed-industries/claude-code-acp'],
         capabilities: {
           supportsAgent: true,
           supportsImages: false,
