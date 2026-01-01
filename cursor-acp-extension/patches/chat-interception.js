@@ -10,6 +10,11 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
       const composerHandle = this._composerDataService.getWeakHandleOptimistic({{e}});
       const modelName = {{n}}?.modelOverride || composerHandle?.data?.modelConfig?.modelName || '';
 
+      // Track current model for slash command filtering
+      if (window.acpSlashCommandIntegration?.setCurrentModel) {
+        window.acpSlashCommandIntegration.setCurrentModel(modelName);
+      }
+
       if (modelName.startsWith('acp:')) {
         console.log('[ACP] 🎯 Intercepting message for ACP model:', modelName);
 
@@ -47,6 +52,13 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
           // The ACP agent maintains conversation history internally per session
           const composerId = {{e}};
           const currentMessage = {{t}} || '';
+
+          // Trigger slash command refresh in background (non-blocking)
+          if (window.acpSlashCommandIntegration) {
+            window.acpSlashCommandIntegration.refreshCommands().catch(err =>
+              console.warn('[ACP] Failed to refresh slash commands:', err)
+            );
+          }
 
           console.log('[ACP] Sending message to session for composer:', composerId);
           const acpResponse = await window.acpService.handleRequest(modelName, currentMessage, composerId);

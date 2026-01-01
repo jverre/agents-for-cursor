@@ -213,6 +213,38 @@ class CursorAutomation {
     await this.mainWindow.keyboard.press('Enter');
   }
 
+  async typeInChat(text) {
+    const chatInput = await this.mainWindow.waitForSelector(
+      'div.aislash-editor-input[contenteditable="true"]',
+      { timeout: 10000 }
+    );
+    await chatInput.click({ force: true });
+    await this.mainWindow.keyboard.type(text);
+    // Don't press Enter - just type
+  }
+
+  async isElementVisible(selector, timeout = 5000) {
+    try {
+      await this.mainWindow.waitForSelector(selector, { timeout });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async hasTextInDropdown(text, timeout = 5000) {
+    try {
+      // Wait for dropdown to appear and check for text
+      const element = await this.mainWindow.waitForSelector(
+        `.composer-dropdown-item:has-text("${text}"), .composer-command-item:has-text("${text}"), [class*="dropdown"]:has-text("${text}"), [class*="autocomplete"]:has-text("${text}")`,
+        { timeout }
+      );
+      return element !== null;
+    } catch {
+      return false;
+    }
+  }
+
   async waitForChatResponse(timeout = 30000) {
     // Count existing sections before waiting for new one
     const initialCount = await this.mainWindow.evaluate(() =>
