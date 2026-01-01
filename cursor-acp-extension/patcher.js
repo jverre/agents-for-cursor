@@ -90,6 +90,9 @@ async function patchMainWorkbench() {
         return;
     }
 
+    // Load patch patterns from JSON file
+    const patterns = await loadPatchPatterns();
+
     // Create backup
     try {
         await fs.access(mainBackupPath);
@@ -121,125 +124,54 @@ async function patchMainWorkbench() {
     }
 
     // Inject ACP model into getAvailableDefaultModels getter
-    const acpModelDef = '{defaultOn:!0,name:"acp:claude-code",clientDisplayName:"Claude Code (ACP)",serverModelName:"acp:claude-code",supportsAgent:!0,supportsMaxMode:!0,supportsNonMaxMode:!0,supportsThinking:!0,supportsImages:!1,isRecommendedForBackgroundComposer:!1,inputboxShortModelName:"Claude Code"}';
     const getterRegex = /\.length===0\?\[\.\.\.(\w+)\]:(\w)\}/;
     const getterMatch = mainContent.match(getterRegex);
 
     if (getterMatch) {
         const [fullMatch, fallbackVar, returnVar] = getterMatch;
-        const getterReplace = `.length===0?[${acpModelDef},...${fallbackVar}]:[${acpModelDef},...${returnVar}]}`;
+        const getterReplace = `.length===0?[${patterns.acpModelDef},...${fallbackVar}]:[${patterns.acpModelDef},...${returnVar}]}`;
         mainContent = mainContent.replace(fullMatch, getterReplace);
     }
 
     // Add Agents section template (for future use)
-    const templateSearch = 'nBf=be("<div class=settings-menu-hoverable><div></div><div>API Keys")';
-    const templateReplace = 'nBf=be("<div class=settings-menu-hoverable><div></div><div>API Keys"),acpAgentsBf=be("<div class=settings-menu-hoverable><div></div><div>Agents")';
-
-    if (mainContent.includes(templateSearch)) {
-        mainContent = mainContent.replace(templateSearch, templateReplace);
+    if (mainContent.includes(patterns.templateSearch)) {
+        mainContent = mainContent.replace(patterns.templateSearch, patterns.templateReplace);
     }
 
     // Patch cursorCommandsService.getCommands to inject ACP commands
-    // Pattern: getCommands(){const i=new Map;for(const e of this._commands.keys()){const t=this.getCommand(e);t&&i.set(e,t)}return i}
-    const cursorCommandsSearch = 'getCommands(){const i=new Map;for(const e of this._commands.keys()){const t=this.getCommand(e);t&&i.set(e,t)}return i}';
-    const cursorCommandsLoopBody = 'for(const e of this._commands.keys()){const t=this.getCommand(e);t&&i.set(e,t)}';
-
-    if (mainContent.includes(cursorCommandsSearch)) {
+    if (mainContent.includes(patterns.cursorCommandsSearch)) {
         // Read and process the cursor commands patch template
         const cursorCommandsTemplate = await readPatchFile(path.join(__dirname, 'patches', 'cursor-commands-patch.template.js'));
-        // Minify: remove comments, newlines, and extra spaces
-        const minified = cursorCommandsTemplate
-            .replace(/\/\/.*$/gm, '') // remove single-line comments
-            .replace(/\s+/g, ' ')     // collapse whitespace
-            .replace(/\s*{\s*/g, '{') // remove space around braces
-            .replace(/\s*}\s*/g, '}')
-            .replace(/\s*\(\s*/g, '(')
-            .replace(/\s*\)\s*/g, ')')
-            .replace(/\s*,\s*/g, ',')
-            .replace(/\s*;\s*/g, ';')
-            .replace(/\s*=\s*/g, '=')
-            .replace(/\s*:\s*/g, ':')
-            .replace(/\s*\|\|\s*/g, '||')
-            .replace(/\s*\?\.\s*/g, '?.')
-            .replace(/\s*=>\s*/g, '=>')
-            .replace(/\s*\.\.\.\s*/g, '...')
-            .trim();
-
-        const cursorCommandsReplace = minified.replace('{{ORIGINAL_BODY}}', cursorCommandsLoopBody);
-        mainContent = mainContent.replace(cursorCommandsSearch, cursorCommandsReplace);
+        const minified = minifyTemplate(cursorCommandsTemplate);
+        const cursorCommandsReplace = minified.replace('{{ORIGINAL_BODY}}', patterns.cursorCommandsLoopBody);
+        mainContent = mainContent.replace(patterns.cursorCommandsSearch, cursorCommandsReplace);
         console.log('[ACP Patcher] Patched cursorCommandsService.getCommands');
     }
 
     // Patch ChatSlashCommandService.getCommands to inject ACP slash commands
-    // Pattern: getCommands(e,t){return Array.from(this._commands.values(),n=>n.data).filter(n=>n.locations.includes(e)&&(!n.modes||n.modes.includes(t)))}
-    const chatSlashSearch = 'getCommands(e,t){return Array.from(this._commands.values(),n=>n.data).filter(n=>n.locations.includes(e)&&(!n.modes||n.modes.includes(t)))}';
-    const chatSlashOriginalBody = 'Array.from(this._commands.values(),n=>n.data).filter(n=>n.locations.includes(e)&&(!n.modes||n.modes.includes(t)))';
-
-    if (mainContent.includes(chatSlashSearch)) {
+    if (mainContent.includes(patterns.chatSlashSearch)) {
         // Read and process the chat slash command patch template
         const chatSlashTemplate = await readPatchFile(path.join(__dirname, 'patches', 'chat-slash-command-patch.template.js'));
-        // Minify: remove comments, newlines, and extra spaces
-        const minifiedChatSlash = chatSlashTemplate
-            .replace(/\/\/.*$/gm, '') // remove single-line comments
-            .replace(/\s+/g, ' ')     // collapse whitespace
-            .replace(/\s*{\s*/g, '{') // remove space around braces
-            .replace(/\s*}\s*/g, '}')
-            .replace(/\s*\(\s*/g, '(')
-            .replace(/\s*\)\s*/g, ')')
-            .replace(/\s*,\s*/g, ',')
-            .replace(/\s*;\s*/g, ';')
-            .replace(/\s*=\s*/g, '=')
-            .replace(/\s*:\s*/g, ':')
-            .replace(/\s*\|\|\s*/g, '||')
-            .replace(/\s*\?\.\s*/g, '?.')
-            .replace(/\s*=>\s*/g, '=>')
-            .replace(/\s*\.\.\.\s*/g, '...')
-            .trim();
-
-        const chatSlashReplace = minifiedChatSlash.replace('{{ORIGINAL_BODY}}', chatSlashOriginalBody);
-        mainContent = mainContent.replace(chatSlashSearch, chatSlashReplace);
+        const minifiedChatSlash = minifyTemplate(chatSlashTemplate);
+        const chatSlashReplace = minifiedChatSlash.replace('{{ORIGINAL_BODY}}', patterns.chatSlashOriginalBody);
+        mainContent = mainContent.replace(patterns.chatSlashSearch, chatSlashReplace);
         console.log('[ACP Patcher] Patched ChatSlashCommandService.getCommands');
     }
 
     // Patch async cursorCommandsService.getCommands (used by composer dropdown)
-    // Pattern: async getCommands(){return await this.initialize(),Array.from(this.commands.values())}
-    const asyncCursorCmdsSearch = 'async getCommands(){return await this.initialize(),Array.from(this.commands.values())}';
-    const asyncCursorCmdsOriginalBody = '(await this.initialize(),Array.from(this.commands.values()))';
-
-    if (mainContent.includes(asyncCursorCmdsSearch)) {
+    if (mainContent.includes(patterns.asyncCursorCmdsSearch)) {
         // Read and process the async cursor commands patch template
         const asyncCursorCmdsTemplate = await readPatchFile(path.join(__dirname, 'patches', 'async-cursor-commands-patch.template.js'));
-        // Minify: remove comments, newlines, and extra spaces
-        const minifiedAsyncCursorCmds = asyncCursorCmdsTemplate
-            .replace(/\/\/.*$/gm, '') // remove single-line comments
-            .replace(/\s+/g, ' ')     // collapse whitespace
-            .replace(/\s*{\s*/g, '{') // remove space around braces
-            .replace(/\s*}\s*/g, '}')
-            .replace(/\s*\(\s*/g, '(')
-            .replace(/\s*\)\s*/g, ')')
-            .replace(/\s*,\s*/g, ',')
-            .replace(/\s*;\s*/g, ';')
-            .replace(/\s*=\s*/g, '=')
-            .replace(/\s*:\s*/g, ':')
-            .replace(/\s*\|\|\s*/g, '||')
-            .replace(/\s*\?\.\s*/g, '?.')
-            .replace(/\s*=>\s*/g, '=>')
-            .replace(/\s*\.\.\.\s*/g, '...')
-            .trim();
-
-        const asyncCursorCmdsReplace = minifiedAsyncCursorCmds.replace('{{ORIGINAL_BODY}}', asyncCursorCmdsOriginalBody);
-        mainContent = mainContent.replace(asyncCursorCmdsSearch, asyncCursorCmdsReplace);
+        const minifiedAsyncCursorCmds = minifyTemplate(asyncCursorCmdsTemplate);
+        const asyncCursorCmdsReplace = minifiedAsyncCursorCmds.replace('{{ORIGINAL_BODY}}', patterns.asyncCursorCmdsOriginalBody);
+        mainContent = mainContent.replace(patterns.asyncCursorCmdsSearch, asyncCursorCmdsReplace);
         console.log('[ACP Patcher] Patched async cursorCommandsService.getCommands');
     }
 
     // Patch the dropdown call site to filter ACP commands based on composer's model
     // This filters out isACP commands unless the composer is using an ACP model
-    // Note: i.props.composerDataHandle?.data.modelConfig?.modelName has the current model
-    const dropdownCallSearch = 'const g=await h.cursorCommandsService.getCommands()';
-    const dropdownCallReplace = 'const g=(await h.cursorCommandsService.getCommands()).filter(_c=>!_c.isACP||i.props?.composerDataHandle?.data?.modelConfig?.modelName?.startsWith("acp:"))';
-
-    if (mainContent.includes(dropdownCallSearch)) {
-        mainContent = mainContent.replace(dropdownCallSearch, dropdownCallReplace);
+    if (mainContent.includes(patterns.dropdownCallSearch)) {
+        mainContent = mainContent.replace(patterns.dropdownCallSearch, patterns.dropdownCallReplace);
         console.log('[ACP Patcher] Patched dropdown to filter ACP commands by model');
     }
 
@@ -266,6 +198,33 @@ async function readPatchFile(filePath) {
     } catch {
         return `  // Placeholder for ${path.basename(filePath)}`;
     }
+}
+
+// Minify template code: remove comments, newlines, and extra spaces
+function minifyTemplate(template) {
+    return template
+        .replace(/\/\/.*$/gm, '') // remove single-line comments
+        .replace(/\s+/g, ' ')     // collapse whitespace
+        .replace(/\s*{\s*/g, '{') // remove space around braces
+        .replace(/\s*}\s*/g, '}')
+        .replace(/\s*\(\s*/g, '(')
+        .replace(/\s*\)\s*/g, ')')
+        .replace(/\s*,\s*/g, ',')
+        .replace(/\s*;\s*/g, ';')
+        .replace(/\s*=\s*/g, '=')
+        .replace(/\s*:\s*/g, ':')
+        .replace(/\s*\|\|\s*/g, '||')
+        .replace(/\s*\?\.\s*/g, '?.')
+        .replace(/\s*=>\s*/g, '=>')
+        .replace(/\s*\.\.\.\s*/g, '...')
+        .trim();
+}
+
+// Load patch patterns from JSON file
+async function loadPatchPatterns() {
+    const patternsPath = path.join(__dirname, 'patches', 'patch-patterns.json');
+    const content = await fs.readFile(patternsPath, 'utf8');
+    return JSON.parse(content);
 }
 
 module.exports = {
