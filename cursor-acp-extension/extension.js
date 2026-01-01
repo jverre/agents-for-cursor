@@ -71,8 +71,7 @@ class ACPAgentManager {
         // Initialize the agent
         await this.initialize(agent);
 
-        // Create session
-        await this.createSession(agent, provider);
+        // Note: Session creation moved to sendPrompt() - we create a new session for each message
 
         return agent;
     }
@@ -133,36 +132,58 @@ class ACPAgentManager {
 
     /**
      * Send prompt to ACP agent
+     * Creates a NEW session for each message and sends full conversation history
      */
     async sendPrompt(agent, messages) {
-        const lastMessage = messages[messages.length - 1];
-        const responseChunks = [];
-
-        // Set up temporary listener for session/update
-        agent.sessionUpdateListener = (params) => {
-            if (params.update?.sessionUpdate === 'agent_message_chunk') {
-                const content = params.update.content;
-                if (content?.type === 'text' && content.text) {
-                    responseChunks.push(content.text);
-                }
-            }
-        };
-
-        // Use session/prompt per ACP protocol spec
-        const result = await this.sendRequest(agent, 'session/prompt', {
-            sessionId: agent.sessionId,
-            prompt: [{
-                type: 'text',
-                text: lastMessage.content
-            }]
+        // Create NEW session for this conversation
+        const sessionResult = await this.sendRequest(agent, 'session/new', {
+            cwd: process.cwd(),
+            mcpServers: []
         });
 
-        delete agent.sessionUpdateListener;
+        const sessionId = sessionResult.sessionId;
+        console.log(`[ACP] Created new session ${sessionId} with ${messages.length} messages`);
 
-        return {
-            text: responseChunks.join(''),
-            stopReason: result.stopReason
-        };
+        let finalResponse = null;
+
+        // Send all messages in the conversation
+        for (let i = 0; i < messages.length; i++) {
+            const message = messages[i];
+            const isLastMessage = (i === messages.length - 1);
+            const responseChunks = [];
+
+            // Set up listener only for the last message (current user message)
+            if (isLastMessage) {
+                agent.sessionUpdateListener = (params) => {
+                    if (params.update?.sessionUpdate === 'agent_message_chunk') {
+                        const content = params.update.content;
+                        if (content?.type === 'text' && content.text) {
+                            responseChunks.push(content.text);
+                        }
+                    }
+                };
+            }
+
+            // Send message to session
+            const result = await this.sendRequest(agent, 'session/prompt', {
+                sessionId: sessionId,
+                prompt: [{
+                    type: 'text',
+                    text: message.content
+                }]
+            });
+
+            if (isLastMessage) {
+                delete agent.sessionUpdateListener;
+                finalResponse = {
+                    text: responseChunks.join(''),
+                    stopReason: result.stopReason
+                };
+            }
+        }
+
+        console.log(`[ACP] Session ${sessionId} complete`);
+        return finalResponse;
     }
 
     /**

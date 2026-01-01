@@ -43,8 +43,18 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
             o("isDraft", !1);
           });
 
-          const acpMessages = [{ role: 'user', content: {{t}} || '' }];
-          const acpResponse = await window.acpService.handleRequest(modelName, acpMessages);
+          // Extract full conversation from Cursor's bubble array
+          const existingBubbles = composerHandle?.data?.bubbles || [];
+          const fullConversation = existingBubbles.map(bubble => ({
+            role: bubble.type === 1 ? 'user' : 'assistant',
+            content: bubble.text || bubble.richText || ''
+          }));
+
+          // Add current message (not yet in bubbles)
+          fullConversation.push({ role: 'user', content: {{t}} || '' });
+
+          console.log('[ACP] Sending conversation with', fullConversation.length, 'messages');
+          const acpResponse = await window.acpService.handleRequest(modelName, fullConversation);
 
           if (acpResponse.error) {
             throw new Error(acpResponse.message || 'ACP error');
