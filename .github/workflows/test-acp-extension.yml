@@ -37,19 +37,14 @@ jobs:
           npm run download-cursor
           node tests/helpers/cursor-installer.js install
 
-      - name: Setup test auth
-        working-directory: cursor-acp-extension
-        env:
-          CURSOR_AUTH_TOKEN: ${{ secrets.CURSOR_AUTH_TOKEN }}
-          CURSOR_EMAIL: ${{ secrets.CURSOR_EMAIL }}
-        run: node tests/helpers/setup-test-auth.js
-
       - name: Run tests
         working-directory: cursor-acp-extension
         run: xvfb-run --auto-servernum npm run test:e2e
         env:
           CI: true
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CURSOR_AUTH_TOKEN: ${{ secrets.CURSOR_AUTH_TOKEN }}
+          CURSOR_EMAIL: ${{ secrets.CURSOR_EMAIL }}
 
       - name: Upload screenshots
         if: always()
