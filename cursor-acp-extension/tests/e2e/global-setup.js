@@ -1,4 +1,5 @@
 const CursorAutomation = require('../helpers/playwright-helpers');
+const { setupTestAuth } = require('../helpers/setup-test-auth');
 const path = require('path');
 const fs = require('fs');
 
@@ -13,6 +14,10 @@ module.exports = async () => {
     console.log('[Global Setup] Cleaning up old user-data directory...');
     fs.rmSync(userDataDir, { recursive: true, force: true });
   }
+
+  // Setup test auth (creates user-data dir with auth tokens if provided)
+  console.log('[Global Setup] Setting up test authentication...');
+  setupTestAuth();
 
   const cursor = new CursorAutomation({ extensionPath, userDataDir });
 
