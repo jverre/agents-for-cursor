@@ -14,15 +14,11 @@ describe('E2E: Cursor ACP Extension', () => {
     await cursor.launch();
     await cursor.screenshot('01-launched.png');
 
-    // Wait for app to initialize
+    // Wait for app UI to initialize (keep 3s for Electron/UI stability)
     await cursor.sleep(3000);
+    await cursor.screenshot('01b-after-ui-ready.png');
 
-    // Wait for extension to fully activate before enabling ACP
-    console.log('[Test] Waiting for extension to activate...');
-    await cursor.sleep(5000);
-    await cursor.screenshot('01b-after-wait.png');
-
-    // Enable ACP and restart
+    // Enable ACP and restart (extension activates with onStartupFinished)
     await cursor.enableACP();
     await cursor.screenshot('03-acp-enabled.png');
   }, 180000);

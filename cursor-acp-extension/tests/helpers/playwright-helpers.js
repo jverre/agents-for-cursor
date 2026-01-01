@@ -87,13 +87,11 @@ class CursorAutomation {
     await this.executeCommand('ACP: Enable', '02');
     await this.screenshot('02e-after-acp-enable-command.png');
 
-    // Wait for patches to be applied (need more time for the command to complete)
-    console.log('[Test] Waiting 5 seconds for patches to be applied...');
-    await this.sleep(5000);
-    await this.screenshot('02f-after-wait-5s.png');
-
-    // Check HTTP server is running
-    await this.waitForHttpServer();
+    // Wait 1 second for patches to be written to disk
+    // (reduced from 5 seconds - patcher now handles file accessibility polling)
+    console.log('[Test] Waiting 1 second for patches to be written...');
+    await this.sleep(1000);
+    await this.screenshot('02f-after-patch-complete.png');
 
     // Restart to apply patches
     await this.restart();

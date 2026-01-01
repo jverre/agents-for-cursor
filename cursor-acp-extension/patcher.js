@@ -28,6 +28,51 @@ function getMainBackupPath() {
     return getMainWorkbenchPath() + '.acp-backup';
 }
 
+// Wait for a file to become accessible with retry logic
+async function waitForFileAccessible(filePath, maxRetries = 20, retryDelay = 500) {
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            // Try to open file for reading to check accessibility
+            const handle = await fs.open(filePath, 'r');
+            await handle.close();
+            return true;
+        } catch (error) {
+            // Check if error is transient (file locked/busy) vs fatal (permission denied)
+            if (error.code === 'EBUSY' || error.code === 'EAGAIN' || error.code === 'ENOENT') {
+                // Transient error - file is locked or not ready yet, retry
+                console.log(`[ACP] File not ready (${error.code}), retry ${i + 1}/${maxRetries}: ${filePath}`);
+                await new Promise(resolve => setTimeout(resolve, retryDelay));
+                continue;
+            } else {
+                // Fatal error (EACCES, etc.)
+                console.error(`[ACP] Fatal error accessing file:`, error);
+                throw error;
+            }
+        }
+    }
+    throw new Error(`File not accessible after ${maxRetries * retryDelay}ms: ${filePath}`);
+}
+
+// Ensure workbench files are ready before patching
+async function ensureFilesReady() {
+    const workbenchPath = getWorkbenchPath();
+    const mainWorkbenchPath = getMainWorkbenchPath();
+
+    console.log('[ACP] Checking workbench file accessibility...');
+
+    try {
+        await Promise.all([
+            waitForFileAccessible(workbenchPath),
+            waitForFileAccessible(mainWorkbenchPath)
+        ]);
+        console.log('[ACP] Workbench files are accessible and ready');
+        return true;
+    } catch (error) {
+        console.error('[ACP] Workbench files not accessible:', error);
+        throw new Error(`Cannot access Cursor workbench files: ${error.message}`);
+    }
+}
+
 // Check if patches are already applied
 async function isPatchApplied() {
     try {
@@ -41,6 +86,9 @@ async function isPatchApplied() {
 
 // Apply patches to workbench file
 async function applyPatches() {
+    // Wait for files to become accessible before proceeding
+    await ensureFilesReady();
+
     const workbenchPath = getWorkbenchPath();
     const backupPath = getBackupPath();
 
@@ -118,7 +166,7 @@ async function patchMainWorkbench() {
     }
 
     // Inject ACP model into getAvailableDefaultModels getter
-    const acpModelDef = '{defaultOn:!0,name:"acp:claude-code",clientDisplayName:"Claude Code (ACP)",serverModelName:"acp:claude-code",supportsAgent:!0,supportsMaxMode:!0,supportsNonMaxMode:!0,supportsThinking:!0,supportsImages:!1,isRecommendedForBackgroundComposer:!1,inputboxShortModelName:"Claude Code"}';
+    const acpModelDef = '{defaultOn:!0,name:"acp:claude-code",clientDisplayName:"Claude Code (ACP)",serverModelName:"acp:claude-code",supportsAgent:!0,supportsMaxMode:!0,supportsNonMaxMode:!0,supportsThinking:!0,supportsImages:!1,supportsDebugMode:!1,isRecommendedForBackgroundComposer:!1,inputboxShortModelName:"Claude Code"}';
     const getterRegex = /\.length===0\?\[\.\.\.(\w+)\]:(\w)\}/;
     const getterMatch = mainContent.match(getterRegex);
 
