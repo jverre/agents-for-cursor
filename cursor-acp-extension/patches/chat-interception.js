@@ -275,6 +275,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
 
                   // HARDCODED for testing - exact format from working Cursor DB
                   const toolBubble = {
+                    _v: 3,
                     bubbleId: toolBubbleId,
                     type: 2,
                     text: '',
@@ -282,6 +283,14 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                     codeBlocks: [],
                     createdAt: new Date().toISOString(),
                     capabilityType: 15,
+                    isAgentic: false,
+                    approximateLintErrors: [],
+                    lints: [],
+                    toolResults: [],
+                    capabilities: [],
+                    capabilityStatuses: {},
+                    supportedTools: [],
+                    tokenCount: { inputTokens: 0, outputTokens: 0 },
                     toolFormerData: {
                       tool: 15,
                       toolIndex: 0,
