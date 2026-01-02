@@ -206,8 +206,14 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                 const existingIds = Array.from(s.toolBubbles.keys()).map(id => id?.slice(0,12)).join(',');
                 dbg(`🔧 isNew=${isNew} complete=${isComplete} failed=${isFailed} raw=${rawToolName?.slice(0,15)} name=${toolName} toolId=${acpToolId} existing=[${existingIds}]`);
 
+                // Get tool input - may be empty on first event, populated on subsequent
+                const toolInput = tc.input || tc.rawInput || {};
+                const inputObj = typeof toolInput === 'string' ? (() => { try { return JSON.parse(toolInput); } catch { return {}; } })() : toolInput;
+                const hasInput = Object.keys(inputObj).length > 0;
+
                 // On first tool_call for this ID, reset text bubble so next text goes to new bubble
-                if (isNew && !s.toolBubbles.has(toolCallId)) {
+                // Only create bubble when we have actual input data (command for Bash, file_path for Read, etc.)
+                if (isNew && !s.toolBubbles.has(toolCallId) && hasInput) {
                   s.bubbleId = null;
                   s.text = '';
 
@@ -218,8 +224,6 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
 
                   // Native tool UI bubble with capabilityType: 15 (TOOL_FORMER)
                   // Match the exact format from Cursor's database
-                  const toolInput = tc.input || tc.rawInput || {};
-                  const inputObj = typeof toolInput === 'string' ? JSON.parse(toolInput) : toolInput;
 
                   // Build params based on tool type (matching Cursor's format)
                   let params = {};
