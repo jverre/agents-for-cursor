@@ -40,52 +40,334 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
           shouldClearText && this._composerUtilsService.clearText({{e}});
           {{n}}?.skipFocusAfterSubmission || this._composerViewsService.focus({{e}}, !0);
 
-          const aiBubbleId = {{ssFunc}}();
           this._composerDataService.updateComposerDataSetStore({{e}}, o => {
             o("status", "generating");
-            o("generatingBubbleIds", [aiBubbleId]);
+            o("generatingBubbleIds", []);
             o("currentBubbleId", void 0);
             o("isDraft", !1);
           });
 
           // Use composer ID for session management, send only current message
-          // The ACP agent maintains conversation history internally per session
           const composerId = {{e}};
           const currentMessage = {{t}} || '';
 
-          // Trigger slash command refresh in background (non-blocking)
+          // Get provider for session management
+          const providerId = modelName.replace('acp:', '').replace(' (ACP)', '').toLowerCase().replace(/\s+/g, '-');
+          const provider = window.acpService?.getProvider(providerId);
+          if (!provider) {
+            throw new Error(`ACP provider "${providerId}" not found`);
+          }
+
+          // Trigger slash command refresh in background
           if (window.acpSlashCommandIntegration) {
             window.acpSlashCommandIntegration.refreshCommands().catch(err =>
               console.warn('[ACP] Failed to refresh slash commands:', err)
             );
           }
 
-          console.log('[ACP] Sending message to session for composer:', composerId);
-          const acpResponse = await window.acpService.handleRequest(modelName, currentMessage, composerId);
+          // Services and ID generator
+          const svc = this._composerDataService;
+          const gen = {{ssFunc}};
+
+          // Create ONE response bubble upfront
+          const responseBubbleId = gen();
+          svc.appendComposerBubbles(composerHandle, [{
+            bubbleId: responseBubbleId,
+            type: 2,
+            text: '',
+            richText: '',
+            codeBlocks: [],
+            createdAt: new Date().toISOString()
+          }]);
+
+          // Mark this bubble as actively generating
+          svc.updateComposerDataSetStore({{e}}, u => {
+            u("generatingBubbleIds", [responseBubbleId]);
+            u("currentBubbleId", responseBubbleId);
+          });
+
+          // Simple state: accumulate text, track tool bubbles
+          const stateKey = `_acp_${composerId}`;
+          window[stateKey] = { text: '', bubbleId: responseBubbleId, toolBubbles: new Map() };
+
+          const acpResponse = await window.acpExtensionBridge.sendMessage(
+            provider,
+            currentMessage,
+            composerId,
+            {
+              onTextChunk: (chunk) => {
+                const s = window[stateKey];
+                // If bubbleId is null, create a new bubble
+                if (!s.bubbleId) {
+                  s.bubbleId = gen();
+                  s.text = '';
+                  svc.appendComposerBubbles(composerHandle, [{
+                    bubbleId: s.bubbleId,
+                    type: 2,
+                    text: '',
+                    richText: '',
+                    codeBlocks: [],
+                    createdAt: new Date().toISOString()
+                  }]);
+                  // Mark new bubble as generating
+                  svc.updateComposerDataSetStore({{e}}, u => {
+                    u("generatingBubbleIds", [s.bubbleId]);
+                    u("currentBubbleId", s.bubbleId);
+                  });
+                }
+                s.text += chunk;
+                svc.updateComposerDataSetStore({{e}}, u => {
+                  u("conversationMap", s.bubbleId, "text", s.text);
+                  u("conversationMap", s.bubbleId, "richText", s.text);
+                });
+              },
+
+              onToolCall: (tc) => {
+                const dbg = (msg) => fetch(`http://localhost:37842/acp/debug?msg=${encodeURIComponent(msg)}`).catch(() => {});
+
+                dbg(`🔧 onToolCall: ${tc.sessionUpdate} | ${tc.status || 'no-status'} | FULL_ID=${tc.toolCallId || 'none'}`);
+
+                const s = window[stateKey];
+                const toolCallId = tc.toolCallId;
+                const isNew = tc.sessionUpdate === 'tool_call';
+                const isComplete = tc.status === 'completed';
+                const isFailed = tc.status === 'failed';
+                // Priority: name/tool (actual tool name) > title (display) > kind
+                const rawToolName = tc.name || tc.tool || tc.title || tc.kind || 'Tool';
+
+                // Normalize tool names from display titles to actual tool names
+                const TOOL_NAME_MAP = {
+                  'Read File': 'Read', 'Read': 'Read',
+                  'Edit File': 'Edit', 'Edit': 'Edit',
+                  'Write File': 'Write', 'Write': 'Write',
+                  'List Directory': 'LS', 'LS': 'LS',
+                  'Grep': 'Grep', 'Search': 'Grep',
+                  'Glob': 'Glob', 'Find': 'Glob',
+                  'Bash': 'Bash', 'Terminal': 'Bash', 'Run Command': 'Bash',
+                  'BashOutput': 'BashOutput',
+                  'KillShell': 'KillShell',
+                  'WebFetch': 'WebFetch', 'Fetch': 'WebFetch',
+                  'WebSearch': 'WebSearch', 'Web Search': 'WebSearch',
+                  'Task': 'Task', 'Agent': 'Task',
+                  'TodoWrite': 'TodoWrite', 'Todo': 'TodoWrite',
+                  'TodoRead': 'TodoRead',
+                  'ExitPlanMode': 'ExitPlanMode', 'Plan': 'ExitPlanMode',
+                  'NotebookRead': 'NotebookRead', 'NotebookEdit': 'NotebookEdit',
+                  'LSP': 'LSP',
+                  'AskUserQuestion': 'AskUserQuestion', 'Question': 'AskUserQuestion',
+                };
+                // Try exact match first, then prefix match for dynamic titles
+                let toolName = TOOL_NAME_MAP[rawToolName];
+                if (!toolName) {
+                  // Check if rawToolName starts with any known prefix
+                  for (const [prefix, name] of Object.entries(TOOL_NAME_MAP)) {
+                    if (rawToolName.startsWith(prefix)) {
+                      toolName = name;
+                      break;
+                    }
+                  }
+                }
+                toolName = toolName || 'Read'; // Default
+
+                // Map ACP tools to Cursor's internal tool IDs to avoid approval UI
+                // MCP (49) requires approval - internal tools don't
+                const ACP_TOOL_MAP = {
+                  // File operations
+                  'Read': 40,           // READ_FILE_V2
+                  'Edit': 38,           // EDIT_FILE_V2
+                  'Write': 38,          // EDIT_FILE_V2
+                  'LS': 39,             // LIST_DIR_V2
+                  // Search operations
+                  'Grep': 41,           // RIPGREP_RAW_SEARCH
+                  'Glob': 42,           // GLOB_FILE_SEARCH
+                  // Terminal
+                  'Bash': 15,           // RUN_TERMINAL_COMMAND_V2
+                  'BashOutput': 15,     // RUN_TERMINAL_COMMAND_V2
+                  'KillShell': 15,      // RUN_TERMINAL_COMMAND_V2
+                  // Web
+                  'WebFetch': 18,       // WEB_SEARCH
+                  'WebSearch': 18,      // WEB_SEARCH
+                  // Tasks & Planning
+                  'Task': 48,           // TASK_V2
+                  'TodoWrite': 35,      // TODO_WRITE
+                  'TodoRead': 34,       // TODO_READ
+                  'ExitPlanMode': 43,   // CREATE_PLAN
+                  // Notebook
+                  'NotebookRead': 40,   // READ_FILE_V2 (closest match)
+                  'NotebookEdit': 38,   // EDIT_FILE_V2 (closest match)
+                  // Code navigation
+                  'LSP': 31,            // GO_TO_DEFINITION
+                  // Questions
+                  'AskUserQuestion': 51, // ASK_QUESTION
+                };
+                const acpToolId = ACP_TOOL_MAP[toolName] || 40; // Default to READ_FILE
+
+                // Debug: show all tool bubble IDs in map
+                const existingIds = Array.from(s.toolBubbles.keys()).map(id => id?.slice(0,12)).join(',');
+                dbg(`🔧 isNew=${isNew} complete=${isComplete} failed=${isFailed} raw=${rawToolName?.slice(0,15)} name=${toolName} toolId=${acpToolId} existing=[${existingIds}]`);
+
+                // On first tool_call for this ID, reset text bubble so next text goes to new bubble
+                if (isNew && !s.toolBubbles.has(toolCallId)) {
+                  s.bubbleId = null;
+                  s.text = '';
+
+                  // Create a specialized tool bubble with capabilityType: 15 (TOOL_FORMER)
+                  const toolBubbleId = gen();
+                  s.toolBubbles.set(toolCallId, toolBubbleId);
+
+                  // Native tool UI bubble with capabilityType: 15 (TOOL_FORMER)
+                  // Match the exact format from Cursor's database
+                  const toolInput = tc.input || tc.rawInput || {};
+                  const inputObj = typeof toolInput === 'string' ? JSON.parse(toolInput) : toolInput;
+
+                  // Build params based on tool type (matching Cursor's format)
+                  let params = {};
+                  switch (toolName) {
+                    // File operations
+                    case 'Read':
+                      if (inputObj.file_path) {
+                        params = { targetFile: inputObj.file_path, effectiveUri: `file://${inputObj.file_path}`, limit: inputObj.limit, offset: inputObj.offset };
+                      }
+                      break;
+                    case 'Edit':
+                      if (inputObj.file_path) {
+                        params = { targetFile: inputObj.file_path, effectiveUri: `file://${inputObj.file_path}`, oldString: inputObj.old_string, newString: inputObj.new_string };
+                      }
+                      break;
+                    case 'Write':
+                      if (inputObj.file_path) {
+                        params = { targetFile: inputObj.file_path, effectiveUri: `file://${inputObj.file_path}`, content: inputObj.content };
+                      }
+                      break;
+                    case 'LS':
+                      params = { targetDirectory: inputObj.path || '.' };
+                      break;
+                    // Search operations
+                    case 'Grep':
+                      params = { pattern: inputObj.pattern, path: inputObj.path, glob: inputObj.glob, outputMode: inputObj.output_mode };
+                      break;
+                    case 'Glob':
+                      params = { globPattern: inputObj.pattern, targetDirectory: inputObj.path };
+                      break;
+                    // Terminal
+                    case 'Bash':
+                    case 'BashOutput':
+                      // Command can come from: tc.command (extracted from title), inputObj.command, or title itself
+                      const bashCmd = tc.command || inputObj.command || tc.title?.replace(/`/g, '') || '';
+                      params = { command: bashCmd, description: inputObj.description || bashCmd };
+                      break;
+                    case 'KillShell':
+                      params = { shellId: inputObj.shell_id };
+                      break;
+                    // Web
+                    case 'WebFetch':
+                      params = { url: inputObj.url, prompt: inputObj.prompt };
+                      break;
+                    case 'WebSearch':
+                      params = { query: inputObj.query };
+                      break;
+                    // Tasks & Planning
+                    case 'Task':
+                      params = { description: inputObj.description, prompt: inputObj.prompt };
+                      break;
+                    case 'TodoWrite':
+                      params = { todos: inputObj.todos };
+                      break;
+                    case 'ExitPlanMode':
+                      params = { plan: inputObj.plan };
+                      break;
+                    // Notebook
+                    case 'NotebookRead':
+                    case 'NotebookEdit':
+                      if (inputObj.notebook_path) {
+                        params = { targetFile: inputObj.notebook_path, effectiveUri: `file://${inputObj.notebook_path}` };
+                      }
+                      break;
+                    // Questions
+                    case 'AskUserQuestion':
+                      params = { question: inputObj.question };
+                      break;
+                  }
+
+                  const toolBubble = {
+                    bubbleId: toolBubbleId,
+                    type: 2,
+                    text: '',
+                    richText: '',
+                    codeBlocks: [],
+                    createdAt: new Date().toISOString(),
+                    capabilityType: 15, // TOOL_FORMER
+                    toolFormerData: {
+                      tool: acpToolId,
+                      toolIndex: s.toolBubbles.size - 1,
+                      modelCallId: gen(),
+                      toolCallId: toolCallId,
+                      status: 'loading',
+                      rawArgs: JSON.stringify(inputObj),
+                      name: toolName.toLowerCase().replace(/\s+/g, '_'),
+                      params: JSON.stringify(params),
+                      additionalData: {}
+                    }
+                  };
+
+                  dbg(`🔧 Creating native tool bubble: ${toolBubbleId.slice(0,8)} capType=15 toolId=${acpToolId} name=${toolName}`);
+
+                  try {
+                    svc.appendComposerBubbles(composerHandle, [toolBubble]);
+                    dbg(`🔧 appendComposerBubbles OK`);
+                  } catch (err) {
+                    dbg(`🔧 appendComposerBubbles ERROR: ${err.message}`);
+                  }
+
+                  try {
+                    svc.updateComposerDataSetStore({{e}}, u => {
+                      u("generatingBubbleIds", [toolBubbleId]);
+                      u("currentBubbleId", toolBubbleId);
+                    });
+                    dbg(`🔧 updateStore OK`);
+                  } catch (err) {
+                    dbg(`🔧 updateStore ERROR: ${err.message}`);
+                  }
+                }
+
+                // Update tool bubble on completion
+                if (isComplete || isFailed) {
+                  const toolBubbleId = s.toolBubbles.get(toolCallId);
+                  dbg(`🔧 ${isFailed ? 'Failed' : 'Completion'}: bubbleId=${toolBubbleId?.slice(0,8) || 'none'}`);
+
+                  if (toolBubbleId) {
+                    try {
+                      // Get result from tool call
+                      const toolResult = tc.result || tc.content || (isFailed ? 'Tool execution failed' : '');
+                      const resultStr = typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult);
+                      const finalStatus = isFailed ? 'error' : 'completed';
+
+                      svc.updateComposerDataSetStore({{e}}, u => {
+                        u("conversationMap", toolBubbleId, "toolFormerData", "status", finalStatus);
+                        u("conversationMap", toolBubbleId, "toolFormerData", "result", resultStr);
+                      });
+                      dbg(`🔧 Marked ${finalStatus} OK (native) with result`);
+                    } catch (err) {
+                      dbg(`🔧 Status update ERROR: ${err.message}`);
+                    }
+                  }
+                }
+              }
+            }
+          );
 
           if (acpResponse.error) {
             throw new Error(acpResponse.message || 'ACP error');
           }
 
-          const responseText = acpResponse.choices?.[0]?.message?.content || '[No response]';
-
-          const aiBubble = {
-            bubbleId: aiBubbleId,
-            type: 2,
-            text: responseText,
-            codeBlocks: [],
-            richText: responseText,
-            createdAt: new Date().toISOString()
-          };
-          this._composerDataService.appendComposerBubbles(composerHandle, [aiBubble]);
-
+          console.log('[ACP] Response complete');
           this._composerDataService.updateComposerDataSetStore({{e}}, o => {
             o("status", "completed");
             o("generatingBubbleIds", []);
             o("chatGenerationUUID", void 0);
           });
 
-          console.log('[ACP] ✅ Message handled by ACP');
+          console.log('[ACP] Message completed successfully');
           return;
 
         } catch (acpError) {
