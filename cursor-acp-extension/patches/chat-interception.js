@@ -211,115 +211,64 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                 const inputObj = typeof toolInput === 'string' ? (() => { try { return JSON.parse(toolInput); } catch { return {}; } })() : toolInput;
                 const hasInput = Object.keys(inputObj).length > 0;
 
-                // On first tool_call for this ID, reset text bubble so next text goes to new bubble
-                // Only create bubble when we have actual input data (command for Bash, file_path for Read, etc.)
-                if (isNew && !s.toolBubbles.has(toolCallId) && hasInput) {
-                  s.bubbleId = null;
-                  s.text = '';
-
-                  // Create a specialized tool bubble with capabilityType: 15 (TOOL_FORMER)
-                  const toolBubbleId = gen();
-                  s.toolBubbles.set(toolCallId, toolBubbleId);
-                  s.toolNames.set(toolCallId, toolName);  // Cache tool name for result formatting
-
-                  // Native tool UI bubble with capabilityType: 15 (TOOL_FORMER)
-                  // Match the exact format from Cursor's database
-
-                  // Build params based on tool type (matching Cursor's format)
-                  let params = {};
-                  switch (toolName) {
-                    // File operations
+                // Helper to build params based on tool type
+                const buildParams = (name, input) => {
+                  switch (name) {
                     case 'Read':
-                      if (inputObj.file_path) {
-                        params = { targetFile: inputObj.file_path, effectiveUri: `file://${inputObj.file_path}`, limit: inputObj.limit, offset: inputObj.offset };
-                      }
-                      break;
+                      return input.file_path ? { targetFile: input.file_path, effectiveUri: `file://${input.file_path}`, limit: input.limit, offset: input.offset } : {};
                     case 'Edit':
-                      if (inputObj.file_path) {
-                        params = { targetFile: inputObj.file_path, effectiveUri: `file://${inputObj.file_path}`, oldString: inputObj.old_string, newString: inputObj.new_string };
-                      }
-                      break;
+                      return input.file_path ? { targetFile: input.file_path, effectiveUri: `file://${input.file_path}`, oldString: input.old_string, newString: input.new_string } : {};
                     case 'Write':
-                      if (inputObj.file_path) {
-                        params = { targetFile: inputObj.file_path, effectiveUri: `file://${inputObj.file_path}`, content: inputObj.content };
-                      }
-                      break;
+                      return input.file_path ? { targetFile: input.file_path, effectiveUri: `file://${input.file_path}`, content: input.content } : {};
                     case 'LS':
-                      params = { targetDirectory: inputObj.path || '.' };
-                      break;
-                    // Search operations
+                      return { targetDirectory: input.path || '.' };
                     case 'Grep':
-                      params = { pattern: inputObj.pattern, path: inputObj.path, glob: inputObj.glob, outputMode: inputObj.output_mode };
-                      break;
+                      return { pattern: input.pattern, path: input.path, glob: input.glob, outputMode: input.output_mode };
                     case 'Glob':
-                      params = { globPattern: inputObj.pattern, targetDirectory: inputObj.path };
-                      break;
-                    // Terminal
+                      return { globPattern: input.pattern, targetDirectory: input.path };
                     case 'Bash':
                     case 'BashOutput':
-                      // Command from rawInput.command (ACP format)
-                      const bashCmd = inputObj.command || tc.title?.replace(/`/g, '') || '';
-                      params = {
-                        command: bashCmd,
+                      const cmd = input.command || '';
+                      return {
+                        command: cmd,
                         requireUserApproval: false,
                         parsingResult: {
                           executableCommands: [{
-                            name: bashCmd.split(' ')[0] || 'cmd',
-                            args: bashCmd.split(' ').slice(1).map(a => ({ type: 'word', value: a })),
-                            fullText: bashCmd
+                            name: cmd.split(' ')[0] || 'cmd',
+                            args: cmd.split(' ').slice(1).map(a => ({ type: 'word', value: a })),
+                            fullText: cmd
                           }]
                         }
                       };
-                      break;
-                    case 'KillShell':
-                      params = { shellId: inputObj.shell_id };
-                      break;
-                    // Web
                     case 'WebFetch':
-                      params = { url: inputObj.url, prompt: inputObj.prompt };
-                      break;
+                      return { url: input.url, prompt: input.prompt };
                     case 'WebSearch':
-                      params = { query: inputObj.query };
-                      break;
-                    // Tasks & Planning
+                      return { query: input.query };
                     case 'Task':
-                      params = { description: inputObj.description, prompt: inputObj.prompt };
-                      break;
-                    case 'TodoWrite':
-                      params = { todos: inputObj.todos };
-                      break;
-                    case 'ExitPlanMode':
-                      params = { plan: inputObj.plan };
-                      break;
-                    // Notebook
-                    case 'NotebookRead':
-                    case 'NotebookEdit':
-                      if (inputObj.notebook_path) {
-                        params = { targetFile: inputObj.notebook_path, effectiveUri: `file://${inputObj.notebook_path}` };
-                      }
-                      break;
-                    // Questions
-                    case 'AskUserQuestion':
-                      params = { question: inputObj.question };
-                      break;
+                      return { description: input.description, prompt: input.prompt };
+                    default:
+                      return {};
                   }
+                };
 
-                  // Map tool names to Cursor's internal names
+                // On first tool_call for this ID, create bubble immediately
+                if (isNew && !s.toolBubbles.has(toolCallId)) {
+                  s.bubbleId = null;
+                  s.text = '';
+
+                  const toolBubbleId = gen();
+                  s.toolBubbles.set(toolCallId, toolBubbleId);
+                  s.toolNames.set(toolCallId, toolName);
+
                   const CURSOR_TOOL_NAMES = {
-                    'Bash': 'run_terminal_cmd',
-                    'BashOutput': 'run_terminal_cmd',
-                    'Read': 'read_file',
-                    'Edit': 'edit_file',
-                    'Write': 'write_file',
-                    'Grep': 'grep_search',
-                    'Glob': 'file_search',
-                    'LS': 'list_dir',
-                    'WebSearch': 'web_search',
-                    'WebFetch': 'web_fetch',
-                    'Task': 'task',
-                    'TodoWrite': 'todo_write',
+                    'Bash': 'run_terminal_cmd', 'BashOutput': 'run_terminal_cmd',
+                    'Read': 'read_file', 'Edit': 'edit_file', 'Write': 'write_file',
+                    'Grep': 'grep_search', 'Glob': 'file_search', 'LS': 'list_dir',
+                    'WebSearch': 'web_search', 'WebFetch': 'web_fetch',
+                    'Task': 'task', 'TodoWrite': 'todo_write',
                   };
                   const cursorToolName = CURSOR_TOOL_NAMES[toolName] || toolName.toLowerCase().replace(/\s+/g, '_');
+                  const params = buildParams(toolName, inputObj);
 
                   const toolBubble = {
                     bubbleId: toolBubbleId,
@@ -328,7 +277,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                     richText: '',
                     codeBlocks: [],
                     createdAt: new Date().toISOString(),
-                    capabilityType: 15, // TOOL_FORMER
+                    capabilityType: 15,
                     toolFormerData: {
                       tool: acpToolId,
                       toolIndex: s.toolBubbles.size - 1,
@@ -342,23 +291,30 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                     }
                   };
 
-                  dbg(`🔧 Creating native tool bubble: ${toolBubbleId.slice(0,8)} capType=15 toolId=${acpToolId} name=${toolName}`);
-
+                  dbg(`🔧 Creating bubble: ${toolBubbleId.slice(0,8)} tool=${toolName} hasInput=${hasInput}`);
                   try {
                     svc.appendComposerBubbles(composerHandle, [toolBubble]);
-                    dbg(`🔧 appendComposerBubbles OK`);
-                  } catch (err) {
-                    dbg(`🔧 appendComposerBubbles ERROR: ${err.message}`);
-                  }
-
-                  try {
                     svc.updateComposerDataSetStore({{e}}, u => {
                       u("generatingBubbleIds", [toolBubbleId]);
                       u("currentBubbleId", toolBubbleId);
                     });
-                    dbg(`🔧 updateStore OK`);
                   } catch (err) {
-                    dbg(`🔧 updateStore ERROR: ${err.message}`);
+                    dbg(`🔧 Create ERROR: ${err.message}`);
+                  }
+                }
+
+                // Update params when we receive new data (subsequent tool_call with input)
+                if (isNew && s.toolBubbles.has(toolCallId) && hasInput) {
+                  const toolBubbleId = s.toolBubbles.get(toolCallId);
+                  const params = buildParams(toolName, inputObj);
+                  dbg(`🔧 Updating params for ${toolBubbleId.slice(0,8)}: cmd=${inputObj.command?.slice(0,20)}`);
+                  try {
+                    svc.updateComposerDataSetStore({{e}}, u => {
+                      u("conversationMap", toolBubbleId, "toolFormerData", "params", JSON.stringify(params));
+                      u("conversationMap", toolBubbleId, "toolFormerData", "rawArgs", JSON.stringify(inputObj));
+                    });
+                  } catch (err) {
+                    dbg(`🔧 Update params ERROR: ${err.message}`);
                   }
                 }
 
