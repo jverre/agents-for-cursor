@@ -212,7 +212,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                 const hasInput = Object.keys(inputObj).length > 0;
 
                 // Helper to build params based on tool type
-                const buildParams = (name, input) => {
+                const buildParams = (name, input, title) => {
                   switch (name) {
                     case 'Read':
                       return input.file_path ? { targetFile: input.file_path, effectiveUri: `file://${input.file_path}`, limit: input.limit, offset: input.offset } : {};
@@ -228,7 +228,9 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                       return { globPattern: input.pattern, targetDirectory: input.path };
                     case 'Bash':
                     case 'BashOutput': {
-                      const cmd = input.command || '';
+                      // Command from input.command, or extract from backtick-quoted title
+                      const titleCmd = title?.match(/`([^`]+)`/)?.[1] || '';
+                      const cmd = input.command || titleCmd || '';
                       return {
                         command: cmd,
                         requireUserApproval: false,
@@ -269,7 +271,12 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                     'Task': 'task', 'TodoWrite': 'todo_write',
                   };
                   const cursorToolName = CURSOR_TOOL_NAMES[toolName] || toolName.toLowerCase().replace(/\s+/g, '_');
-                  const params = buildParams(toolName, inputObj);
+                  const params = buildParams(toolName, inputObj, tc.title);
+
+                  // Build rawArgs in expected format
+                  const rawArgs = (toolName === 'Bash' || toolName === 'BashOutput')
+                    ? { command: params.command || '', is_background: false }
+                    : inputObj;
 
                   const toolBubble = {
                     bubbleId: toolBubbleId,
@@ -285,7 +292,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                       modelCallId: gen(),
                       toolCallId: toolCallId,
                       status: 'loading',
-                      rawArgs: JSON.stringify(inputObj),
+                      rawArgs: JSON.stringify(rawArgs),
                       name: cursorToolName,
                       params: JSON.stringify(params),
                       additionalData: {}
@@ -307,12 +314,15 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                 // Update params when we receive new data (subsequent tool_call with input)
                 if (isNew && s.toolBubbles.has(toolCallId) && hasInput) {
                   const toolBubbleId = s.toolBubbles.get(toolCallId);
-                  const params = buildParams(toolName, inputObj);
-                  dbg(`🔧 Updating params for ${toolBubbleId.slice(0,8)}: cmd=${inputObj.command?.slice(0,20)}`);
+                  const params = buildParams(toolName, inputObj, tc.title);
+                  const rawArgs = (toolName === 'Bash' || toolName === 'BashOutput')
+                    ? { command: params.command || '', is_background: false }
+                    : inputObj;
+                  dbg(`🔧 Updating params for ${toolBubbleId.slice(0,8)}: cmd=${params.command?.slice(0,20)}`);
                   try {
                     svc.updateComposerDataSetStore({{e}}, u => {
                       u("conversationMap", toolBubbleId, "toolFormerData", "params", JSON.stringify(params));
-                      u("conversationMap", toolBubbleId, "toolFormerData", "rawArgs", JSON.stringify(inputObj));
+                      u("conversationMap", toolBubbleId, "toolFormerData", "rawArgs", JSON.stringify(rawArgs));
                     });
                   } catch (err) {
                     dbg(`🔧 Update params ERROR: ${err.message}`);
