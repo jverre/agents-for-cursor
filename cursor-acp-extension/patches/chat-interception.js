@@ -86,9 +86,9 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
             u("currentBubbleId", responseBubbleId);
           });
 
-          // Simple state: accumulate text, track tool bubbles
+          // Simple state: accumulate text, track tool bubbles and their types
           const stateKey = `_acp_${composerId}`;
-          window[stateKey] = { text: '', bubbleId: responseBubbleId, toolBubbles: new Map() };
+          window[stateKey] = { text: '', bubbleId: responseBubbleId, toolBubbles: new Map(), toolNames: new Map() };
 
           const acpResponse = await window.acpExtensionBridge.sendMessage(
             provider,
@@ -214,6 +214,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                   // Create a specialized tool bubble with capabilityType: 15 (TOOL_FORMER)
                   const toolBubbleId = gen();
                   s.toolBubbles.set(toolCallId, toolBubbleId);
+                  s.toolNames.set(toolCallId, toolName);  // Cache tool name for result formatting
 
                   // Native tool UI bubble with capabilityType: 15 (TOOL_FORMER)
                   // Match the exact format from Cursor's database
@@ -252,9 +253,19 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                     // Terminal
                     case 'Bash':
                     case 'BashOutput':
-                      // Command can come from: tc.command (extracted from title), inputObj.command, or title itself
-                      const bashCmd = tc.command || inputObj.command || tc.title?.replace(/`/g, '') || '';
-                      params = { command: bashCmd, description: inputObj.description || bashCmd };
+                      // Command from rawInput.command (ACP format)
+                      const bashCmd = inputObj.command || tc.title?.replace(/`/g, '') || '';
+                      params = {
+                        command: bashCmd,
+                        requireUserApproval: false,
+                        parsingResult: {
+                          executableCommands: [{
+                            name: bashCmd.split(' ')[0] || 'cmd',
+                            args: bashCmd.split(' ').slice(1).map(a => ({ type: 'word', value: a })),
+                            fullText: bashCmd
+                          }]
+                        }
+                      };
                       break;
                     case 'KillShell':
                       params = { shellId: inputObj.shell_id };
@@ -289,6 +300,23 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                       break;
                   }
 
+                  // Map tool names to Cursor's internal names
+                  const CURSOR_TOOL_NAMES = {
+                    'Bash': 'run_terminal_cmd',
+                    'BashOutput': 'run_terminal_cmd',
+                    'Read': 'read_file',
+                    'Edit': 'edit_file',
+                    'Write': 'write_file',
+                    'Grep': 'grep_search',
+                    'Glob': 'file_search',
+                    'LS': 'list_dir',
+                    'WebSearch': 'web_search',
+                    'WebFetch': 'web_fetch',
+                    'Task': 'task',
+                    'TodoWrite': 'todo_write',
+                  };
+                  const cursorToolName = CURSOR_TOOL_NAMES[toolName] || toolName.toLowerCase().replace(/\s+/g, '_');
+
                   const toolBubble = {
                     bubbleId: toolBubbleId,
                     type: 2,
@@ -304,7 +332,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                       toolCallId: toolCallId,
                       status: 'loading',
                       rawArgs: JSON.stringify(inputObj),
-                      name: toolName.toLowerCase().replace(/\s+/g, '_'),
+                      name: cursorToolName,
                       params: JSON.stringify(params),
                       additionalData: {}
                     }
@@ -333,14 +361,38 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                 // Update tool bubble on completion
                 if (isComplete || isFailed) {
                   const toolBubbleId = s.toolBubbles.get(toolCallId);
-                  dbg(`🔧 ${isFailed ? 'Failed' : 'Completion'}: bubbleId=${toolBubbleId?.slice(0,8) || 'none'}`);
+                  const cachedToolName = s.toolNames?.get(toolCallId) || toolName;
+                  dbg(`🔧 ${isFailed ? 'Failed' : 'Completion'}: bubbleId=${toolBubbleId?.slice(0,8) || 'none'} tool=${cachedToolName}`);
 
                   if (toolBubbleId) {
                     try {
-                      // Get result from tool call
-                      const toolResult = tc.result || tc.content || (isFailed ? 'Tool execution failed' : '');
-                      const resultStr = typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult);
+                      // Format result based on tool type
+                      let resultStr;
                       const finalStatus = isFailed ? 'error' : 'completed';
+
+                      if (cachedToolName === 'Bash' || cachedToolName === 'BashOutput') {
+                        // Terminal result format - extract output from ACP response
+                        let output = '';
+                        if (Array.isArray(tc.result)) {
+                          // ACP format: [{type: 'text', text: 'output'}]
+                          output = tc.result.map(r => r.text || '').join('');
+                        } else if (typeof tc.result === 'string') {
+                          output = tc.result;
+                        } else if (tc.content) {
+                          output = typeof tc.content === 'string' ? tc.content : JSON.stringify(tc.content);
+                        }
+                        resultStr = JSON.stringify({
+                          output: output,
+                          rejected: false,
+                          notInterrupted: true,
+                          endedReason: isFailed ? 'RUN_TERMINAL_COMMAND_ENDED_REASON_ERROR' : 'RUN_TERMINAL_COMMAND_ENDED_REASON_EXECUTION_COMPLETED',
+                          exitCodeV2: isFailed ? 1 : 0
+                        });
+                      } else {
+                        // Default: stringify result
+                        const toolResult = tc.result || tc.content || (isFailed ? 'Tool execution failed' : '');
+                        resultStr = typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult);
+                      }
 
                       svc.updateComposerDataSetStore({{e}}, u => {
                         u("conversationMap", toolBubbleId, "toolFormerData", "status", finalStatus);

@@ -230,21 +230,18 @@ class ACPAgentManager {
                     if (update?.sessionUpdate === 'tool_call' || update?.sessionUpdate === 'tool_call_update') {
                         const toolCallId = update.toolCallId;
 
-                        // Extract tool name and command from title
+                        // Extract tool name from _meta.claudeCode.toolName (e.g., "mcp__acp__Bash" -> "Bash")
                         let toolName = 'unknown';
-                        let commandString = null;
-                        const title = update.title || '';
-
-                        // Check if title contains a command in backticks (e.g., "`echo test`")
-                        const backtickMatch = title.match(/`([^`]+)`/);
-                        if (backtickMatch) {
-                            toolName = 'Bash';
-                            commandString = backtickMatch[1];
-                        } else if (title) {
-                            toolName = title.split(' ')[0] || update.kind || 'unknown';
+                        const metaToolName = update._meta?.claudeCode?.toolName;
+                        if (metaToolName) {
+                            // Extract last part: "mcp__acp__Bash" -> "Bash"
+                            const parts = metaToolName.split('__');
+                            toolName = parts[parts.length - 1] || metaToolName;
+                        } else if (update.title) {
+                            toolName = update.title.split(' ')[0] || update.kind || 'unknown';
                         }
 
-                        // Cache tool name for updates
+                        // Cache tool name for updates (which may not have _meta)
                         if (toolCallId && toolName !== 'unknown') {
                             this.toolCallNames.set(toolCallId, toolName);
                         } else if (toolCallId && this.toolCallNames.has(toolCallId)) {
@@ -265,9 +262,8 @@ class ACPAgentManager {
                                 status: update.status,
                                 rawInput: update.rawInput,
                                 input: update.rawInput,
-                                command: commandString,  // Extracted command for Bash
                                 content: update.content,
-                                result: update.content
+                                result: update._meta?.claudeCode?.toolResponse || update.content
                             });
                             for (const listener of listeners) {
                                 listener.write(`data: ${toolData}\n\n`);
