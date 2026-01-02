@@ -227,7 +227,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                     case 'Glob':
                       return { globPattern: input.pattern, targetDirectory: input.path };
                     case 'Bash':
-                    case 'BashOutput':
+                    case 'BashOutput': {
                       const cmd = input.command || '';
                       return {
                         command: cmd,
@@ -240,6 +240,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                           }]
                         }
                       };
+                    }
                     case 'WebFetch':
                       return { url: input.url, prompt: input.prompt };
                     case 'WebSearch':
