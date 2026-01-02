@@ -331,6 +331,9 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                     ? { command: params.command || '', is_background: false }
                     : inputObj;
                   dbg(`🔧 Updating params for ${toolBubbleId.slice(0,8)}: cmd=${params.command?.slice(0,20)}`);
+
+                  // Debug alert for update
+                  alert('[ACP UPDATE]\ntitle: ' + tc.title + '\ncommand: ' + (inputObj?.command || params?.command));
                   try {
                     svc.updateComposerDataSetStore({{e}}, u => {
                       u("conversationMap", toolBubbleId, "toolFormerData", "params", JSON.stringify(params));
