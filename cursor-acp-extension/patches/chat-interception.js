@@ -296,6 +296,22 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                   };
 
                   dbg(`🔧 Creating bubble: ${toolBubbleId.slice(0,8)} tool=${toolName} hasInput=${hasInput}`);
+
+                  // Show notification with available data for debugging
+                  try {
+                    const debugData = {
+                      toolName,
+                      rawToolName,
+                      hasInput,
+                      'tc.title': tc.title,
+                      'tc.name': tc.name,
+                      'tc.tool': tc.tool,
+                      'inputObj.command': inputObj?.command,
+                      'params.command': params?.command
+                    };
+                    console.log('[ACP DEBUG DATA]', debugData);
+                    alert('[ACP Debug]\n' + JSON.stringify(debugData, null, 2));
+                  } catch (e) {}
                   try {
                     svc.appendComposerBubbles(composerHandle, [toolBubble]);
                     svc.updateComposerDataSetStore({{e}}, u => {
