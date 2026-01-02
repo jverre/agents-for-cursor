@@ -273,11 +273,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                   const cursorToolName = CURSOR_TOOL_NAMES[toolName] || toolName.toLowerCase().replace(/\s+/g, '_');
                   const params = buildParams(toolName, inputObj, tc.title);
 
-                  // Build rawArgs in expected format
-                  const rawArgs = (toolName === 'Bash' || toolName === 'BashOutput')
-                    ? { command: params.command || '', is_background: false }
-                    : inputObj;
-
+                  // HARDCODED for testing - exact format from working Cursor DB
                   const toolBubble = {
                     bubbleId: toolBubbleId,
                     type: 2,
@@ -287,14 +283,14 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                     createdAt: new Date().toISOString(),
                     capabilityType: 15,
                     toolFormerData: {
-                      tool: acpToolId,
-                      toolIndex: s.toolBubbles.size - 1,
+                      tool: 15,
+                      toolIndex: 0,
                       modelCallId: gen(),
                       toolCallId: toolCallId,
                       status: 'loading',
-                      rawArgs: JSON.stringify(rawArgs),
-                      name: cursorToolName,
-                      params: JSON.stringify(params),
+                      rawArgs: '{"command": "echo chicken", "is_background": false}',
+                      name: 'run_terminal_cmd',
+                      params: '{"command":"echo chicken","requireUserApproval":true,"parsingResult":{"executableCommands":[{"name":"echo","args":[{"type":"word","value":"chicken"}],"fullText":"echo chicken"}]}}',
                       additionalData: {}
                     }
                   };
