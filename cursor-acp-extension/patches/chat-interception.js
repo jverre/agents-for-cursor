@@ -123,28 +123,15 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
               },
 
               onToolCall: (tc) => {
-                const dbg = (msg) => fetch(`http://localhost:37842/acp/debug?msg=${encodeURIComponent(msg)}`).catch(() => {});
-                dbg(`🔧 onToolCall: ${tc.sessionUpdate} | ${tc.status || 'no-status'} | FULL_ID=${tc.toolCallId || 'none'}`);
-
                 const s = window[stateKey];
                 const toolCallId = tc.toolCallId;
                 const isNew = tc.sessionUpdate === 'tool_call';
                 const isComplete = tc.status === 'completed';
                 const isFailed = tc.status === 'failed';
-                // Use tool kind from ACP (e.g., "read", "edit", "bash")
                 const toolName = tc.kind || 'tool';
 
-                // Use Cursor's TOOL_FORMER capabilityType (15) so bubbles render
-                // Use custom tool type 90 - need to patch React renderer to handle it
-                const TOOL_FORMER_CAPABILITY = 15;  // Cursor's $s.TOOL_FORMER
-                const ACP_TOOL_TYPE = 90;  // Custom ACP tool type
-
-                // All ACP tools use the unified ACP type
-                const acpToolId = ACP_TOOL_TYPE;
-
-                // Debug: show all tool bubble IDs in map
-                const existingIds = Array.from(s.toolBubbles.keys()).map(id => id?.slice(0,12)).join(',');
-                dbg(`🔧 isNew=${isNew} complete=${isComplete} failed=${isFailed} name=${toolName} toolId=${acpToolId} existing=[${existingIds}]`);
+                const TOOL_FORMER_CAPABILITY = 15;
+                const ACP_TOOL_TYPE = 90;
 
                 // Get tool input - may be empty on first event, populated on subsequent
                 const toolInput = tc.input || tc.rawInput || {};
@@ -180,16 +167,13 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                     }
                   };
 
-                  dbg(`🔧 Creating tool bubble: id=${toolBubbleId.slice(0,8)} name=${toolName} capType=${toolBubble.capabilityType} toolType=${toolBubble.toolFormerData?.tool}`);
                   try {
                     svc.appendComposerBubbles(composerHandle, [toolBubble]);
-                    dbg(`🔧 Tool bubble appended OK`);
                     svc.updateComposerDataSetStore({{e}}, u => {
                       u("generatingBubbleIds", [toolBubbleId]);
                       u("currentBubbleId", toolBubbleId);
                     });
                   } catch (err) {
-                    dbg(`🔧 Create ERROR: ${err.message}`);
                     console.error('[ACP] Tool bubble create failed:', err);
                   }
                 }
@@ -197,14 +181,9 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                 // Update rawArgs when we receive input data
                 if (isNew && s.toolBubbles.has(toolCallId) && hasInput) {
                   const toolBubbleId = s.toolBubbles.get(toolCallId);
-                  dbg(`🔧 Updating rawArgs for ${toolBubbleId.slice(0,8)}`);
-                  try {
-                    svc.updateComposerDataSetStore({{e}}, u => {
-                      u("conversationMap", toolBubbleId, "toolFormerData", "rawArgs", JSON.stringify(inputObj));
-                    });
-                  } catch (err) {
-                    dbg(`🔧 Update rawArgs ERROR: ${err.message}`);
-                  }
+                  svc.updateComposerDataSetStore({{e}}, u => {
+                    u("conversationMap", toolBubbleId, "toolFormerData", "rawArgs", JSON.stringify(inputObj));
+                  });
                 }
 
                 // Check for tool_result event as completion indicator
@@ -213,32 +192,25 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                 // Update tool bubble on completion
                 if (isComplete || isFailed || isToolResult) {
                   const toolBubbleId = s.toolBubbles.get(toolCallId);
-                  dbg(`🔧 Completion: bubbleId=${toolBubbleId?.slice(0,8) || 'none'}`);
-
                   if (toolBubbleId) {
-                    try {
-                      const finalStatus = isFailed ? 'error' : 'completed';
+                    const finalStatus = isFailed ? 'error' : 'completed';
 
-                      // Extract output from ACP response
-                      let output = '';
-                      if (Array.isArray(tc.result)) {
-                        output = tc.result.map(r => r.text || '').join('');
-                      } else if (typeof tc.result === 'string') {
-                        output = tc.result;
-                      } else if (tc.content) {
-                        output = typeof tc.content === 'string' ? tc.content : JSON.stringify(tc.content);
-                      } else if (isFailed) {
-                        output = 'Tool execution failed';
-                      }
-
-                      svc.updateComposerDataSetStore({{e}}, u => {
-                        u("conversationMap", toolBubbleId, "toolFormerData", "status", finalStatus);
-                        u("conversationMap", toolBubbleId, "toolFormerData", "result", output);
-                      });
-                      dbg(`🔧 Marked ${finalStatus}`);
-                    } catch (err) {
-                      dbg(`🔧 Status update ERROR: ${err.message}`);
+                    // Extract output from ACP response
+                    let output = '';
+                    if (Array.isArray(tc.result)) {
+                      output = tc.result.map(r => r.text || '').join('');
+                    } else if (typeof tc.result === 'string') {
+                      output = tc.result;
+                    } else if (tc.content) {
+                      output = typeof tc.content === 'string' ? tc.content : JSON.stringify(tc.content);
+                    } else if (isFailed) {
+                      output = 'Tool execution failed';
                     }
+
+                    svc.updateComposerDataSetStore({{e}}, u => {
+                      u("conversationMap", toolBubbleId, "toolFormerData", "status", finalStatus);
+                      u("conversationMap", toolBubbleId, "toolFormerData", "result", output);
+                    });
                   }
                 }
               }
