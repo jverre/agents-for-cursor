@@ -29,7 +29,8 @@ try {
 
         if (callbacks) {
           // Streaming mode - read NDJSON chunks
-          console.log('[ACP Bridge] Reading streaming response...');
+          const streamStart = Date.now();
+          console.log('[ACP Bridge] 📡 Starting streaming response...');
           const reader = response.body.getReader();
           const decoder = new TextDecoder();
           let buffer = '';
@@ -50,10 +51,14 @@ try {
                 console.log('[ACP Bridge] Stream chunk:', data.type);
 
                 if (data.type === 'text' && callbacks.onTextChunk) {
+                  console.log(`[ACP Bridge] 📝 Received chunk seq=${data.seq} len=${data.content?.length} preview="${data.content?.slice(0, 30).replace(/\n/g, '\\n')}..."`);
                   fullText += data.content;
                   callbacks.onTextChunk(data.content);
                 } else if (data.type === 'tool' && callbacks.onToolCall) {
+                  console.log('[ACP Bridge] 🔧 Tool event:', data.sessionUpdate, '| id:', data.toolCallId?.slice(0, 8), '| status:', data.status, '| kind:', data.kind);
                   callbacks.onToolCall(data);
+                } else if (data.type === 'done') {
+                  console.log('[ACP Bridge] ✅ Stream done marker received');
                 }
               } catch (e) {
                 console.error('[ACP Bridge] Error parsing chunk:', e);
@@ -61,6 +66,8 @@ try {
             }
           }
 
+          const streamDuration = Date.now() - streamStart;
+          console.log('[ACP Bridge] 📡 Stream completed in', streamDuration, 'ms | text length:', fullText.length);
           return { text: fullText };
         } else {
           // Non-streaming mode
