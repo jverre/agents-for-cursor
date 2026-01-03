@@ -27,6 +27,16 @@ class CursorAutomation {
   }
 
   async launch() {
+    // Kill any lingering Cursor processes before launching (important on Linux CI)
+    if (process.platform === 'linux') {
+      const { exec } = require('child_process');
+      // Target the actual Cursor executable path, not the test directory
+      await new Promise(resolve => {
+        exec('pkill -9 -f ".local/share/Cursor" || true', () => resolve());
+      });
+      await this.sleep(2000);
+    }
+
     const executablePath = this.installer.getCursorExecutablePath();
 
     // Open the extension directory as workspace
@@ -322,6 +332,19 @@ class CursorAutomation {
       await this.electronApp.close().catch(() => {});
       this.electronApp = null;
       this.mainWindow = null;
+
+      // Wait for process to fully terminate (important on Linux CI)
+      await this.sleep(3000);
+
+      // Kill any lingering Cursor processes on Linux
+      if (process.platform === 'linux') {
+        const { exec } = require('child_process');
+        // Target the actual Cursor executable path, not the test directory
+        await new Promise(resolve => {
+          exec('pkill -9 -f ".local/share/Cursor" || true', () => resolve());
+        });
+        await this.sleep(1000);
+      }
     }
   }
 

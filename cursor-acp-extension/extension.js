@@ -24,7 +24,9 @@ class ACPAgentManager {
         this.agents = new Map(); // Map<providerId, AgentProcess>
         this.sessions = new Map(); // Map<composerId, { sessionId, providerId }>
         this.slashCommands = new Map(); // Map<providerId, AvailableCommand[]>
+        this.terminals = new Map(); // Map<terminalId, { process, output, exitCode, done }>
         this.nextMessageId = 1;
+        this.nextTerminalId = 1;
     }
 
     /**
@@ -48,6 +50,7 @@ class ACPAgentManager {
             sessionId: null,
             initialized: false,
             pendingRequests: new Map(),
+            sessionUpdateListeners: new Map(),  // Map<sessionId, {onUpdate, chunkSeq}>
             readline: createInterface({ input: proc.stdout }),
         };
 
@@ -56,36 +59,203 @@ class ACPAgentManager {
             try {
                 const message = JSON.parse(line);
 
-                // Handle response
+                // Handle response to our requests
                 if (message.id !== undefined && agent.pendingRequests.has(message.id)) {
-                    const { resolve, reject } = agent.pendingRequests.get(message.id);
+                    const { resolve, reject, startTime, method } = agent.pendingRequests.get(message.id);
                     agent.pendingRequests.delete(message.id);
+                    const elapsed = startTime ? Date.now() - startTime : 0;
+                    console.log('[ACP] 📩 Response received | id:', message.id, '| method:', method, '| elapsed:', elapsed, 'ms | error:', !!message.error);
 
                     if (message.error) {
+                        console.error('[ACP] ❌ Request error:', message.error.message || message.error);
                         reject(new Error(message.error.message || 'ACP error'));
                     } else {
                         resolve(message.result);
                     }
                 }
 
+                // Handle permission requests from agent - auto-approve all
+                if (message.method === 'session/request_permission' && message.id !== undefined) {
+                    console.log('[ACP] Auto-approving permission request:', message.params?.permission?.kind);
+                    const response = {
+                        jsonrpc: '2.0',
+                        id: message.id,
+                        result: { granted: true }
+                    };
+                    agent.process.stdin.write(JSON.stringify(response) + '\n');
+                }
+
+                // Handle terminal/create - spawn command and return terminal ID
+                if (message.method === 'terminal/create' && message.id !== undefined) {
+                    const { command, args, cwd } = message.params || {};
+                    const terminalId = `term_${this.nextTerminalId++}`;
+                    console.log('[ACP] 🔧 Terminal CREATE:', terminalId, '| cmd:', command, args?.join(' ').slice(0, 50), '| cwd:', cwd?.slice(-30));
+
+                    const cmdArgs = args || [];
+                    const termProc = spawn(command, cmdArgs, {
+                        cwd: cwd || getWorkspacePath(),
+                        shell: true,
+                        env: process.env
+                    });
+
+                    const terminal = {
+                        process: termProc,
+                        output: '',
+                        exitCode: null,
+                        done: false
+                    };
+
+                    const terminalStart = Date.now();
+                    termProc.stdout.on('data', (data) => {
+                        const chunk = data.toString();
+                        terminal.output += chunk;
+                        console.log('[ACP] 📄 Terminal', terminalId, 'stdout:', chunk.length, 'bytes | total:', terminal.output.length);
+                    });
+                    termProc.stderr.on('data', (data) => {
+                        const chunk = data.toString();
+                        terminal.output += chunk;
+                        console.log('[ACP] 📄 Terminal', terminalId, 'stderr:', chunk.length, 'bytes');
+                    });
+                    termProc.on('error', (err) => {
+                        console.error('[ACP] ❌ Terminal', terminalId, 'error:', err.message);
+                        terminal.exitCode = -1;
+                        terminal.done = true;
+                    });
+                    termProc.on('close', (code) => {
+                        const elapsed = Date.now() - terminalStart;
+                        terminal.exitCode = code;
+                        terminal.done = true;
+                        console.log('[ACP] ✅ Terminal', terminalId, 'exited | code:', code, '| elapsed:', elapsed, 'ms | output:', terminal.output.length, 'bytes');
+                    });
+
+                    this.terminals.set(terminalId, terminal);
+
+                    const response = {
+                        jsonrpc: '2.0',
+                        id: message.id,
+                        result: { terminalId }
+                    };
+                    agent.process.stdin.write(JSON.stringify(response) + '\n');
+                }
+
+                // Handle terminal/wait_for_exit - wait for process to finish
+                if (message.method === 'terminal/wait_for_exit' && message.id !== undefined) {
+                    const { terminalId } = message.params || {};
+                    const terminal = this.terminals.get(terminalId);
+                    console.log('[ACP] ⏳ Terminal WAIT:', terminalId, '| done:', terminal?.done, '| exitCode:', terminal?.exitCode);
+
+                    const sendResult = () => {
+                        console.log('[ACP] ✅ Terminal WAIT complete:', terminalId, '| exitCode:', terminal?.exitCode ?? 0);
+                        const response = {
+                            jsonrpc: '2.0',
+                            id: message.id,
+                            result: { exitCode: terminal?.exitCode ?? 0 }
+                        };
+                        agent.process.stdin.write(JSON.stringify(response) + '\n');
+                    };
+
+                    if (terminal?.done) {
+                        sendResult();
+                    } else if (terminal) {
+                        terminal.process.on('close', sendResult);
+                    } else {
+                        sendResult(); // Terminal not found, return 0
+                    }
+                }
+
+                // Handle terminal/output - return accumulated output
+                if (message.method === 'terminal/output' && message.id !== undefined) {
+                    const { terminalId } = message.params || {};
+                    const terminal = this.terminals.get(terminalId);
+                    console.log('[ACP] 📤 Terminal OUTPUT:', terminalId, '| len:', terminal?.output?.length, '| exitCode:', terminal?.exitCode);
+
+                    const response = {
+                        jsonrpc: '2.0',
+                        id: message.id,
+                        result: {
+                            output: terminal?.output || '',
+                            exitCode: terminal?.exitCode
+                        }
+                    };
+                    agent.process.stdin.write(JSON.stringify(response) + '\n');
+                }
+
+                // Handle terminal/release - cleanup terminal
+                if (message.method === 'terminal/release' && message.id !== undefined) {
+                    const { terminalId } = message.params || {};
+                    console.log('[ACP] Releasing terminal:', terminalId);
+
+                    const terminal = this.terminals.get(terminalId);
+                    if (terminal?.process && !terminal.done) {
+                        terminal.process.kill();
+                    }
+                    this.terminals.delete(terminalId);
+
+                    const response = {
+                        jsonrpc: '2.0',
+                        id: message.id,
+                        result: {}
+                    };
+                    agent.process.stdin.write(JSON.stringify(response) + '\n');
+                }
+
                 // Handle notification (session/update)
                 if (message.method === 'session/update') {
                     const update = message.params?.update;
+                    const sessionId = message.params?.sessionId;
+                    console.log('[ACP] session/update received:', update?.sessionUpdate, '| session:', sessionId?.slice(0, 8));
 
                     // Handle available_commands_update - cache slash commands
                     if (update?.sessionUpdate === 'available_commands_update') {
                         agent.slashCommands = update.availableCommands || [];
                         this.slashCommands.set(agent.providerId, agent.slashCommands);
-                        console.log('[ACP] Received slash commands:', agent.slashCommands.length, 'commands for', agent.providerId);
+                        console.log('[ACP] Received', agent.slashCommands.length, 'slash commands');
                     }
 
-                    // Forward to listener for other updates (agent_message_chunk, etc.)
-                    if (agent.sessionUpdateListener) {
-                        agent.sessionUpdateListener(message.params);
+                    // Handle agent_message_chunk - extract text content
+                    if (update?.sessionUpdate === 'agent_message_chunk') {
+                        // Extract text from content - may be nested as { type: 'text', text: '...' }
+                        let textContent = '';
+                        if (typeof update.content === 'string') {
+                            textContent = update.content;
+                        } else if (update.content?.type === 'text' && typeof update.content?.text === 'string') {
+                            textContent = update.content.text;
+                        } else if (typeof update.content?.text === 'string') {
+                            textContent = update.content.text;
+                        }
+
+                        // Skip empty chunks
+                        if (!textContent) {
+                            return;
+                        }
+                    }
+
+                    // Log tool events for debugging
+                    if (update?.sessionUpdate === 'tool_call' || update?.sessionUpdate === 'tool_call_update') {
+                        console.log('[ACP] Tool event:', update.sessionUpdate, '| id:', update.toolCallId?.slice(0, 8), '| status:', update.status, '| kind:', update.kind);
+                    }
+
+                    // Forward to session-specific listener (routes by sessionId to avoid race conditions)
+                    const listenerEntry = agent.sessionUpdateListeners.get(sessionId);
+                    if (listenerEntry?.onUpdate) {
+                        listenerEntry.onUpdate(message.params);
                     }
                 }
             } catch (error) {
                 console.error('[ACP] Failed to parse message:', error);
+            }
+        });
+
+        // Handle stderr - log any errors from the agent
+        proc.stderr.on('data', (data) => {
+            const msg = data.toString().trim();
+            if (msg) {
+                // Check if it's an error or just info
+                if (msg.includes('error') || msg.includes('Error') || msg.includes('ERROR')) {
+                    console.error('[ACP Agent] ❌ STDERR:', msg.slice(0, 200));
+                } else {
+                    console.log('[ACP Agent] 📢 stderr:', msg.slice(0, 200));
+                }
             }
         });
 
@@ -111,16 +281,20 @@ class ACPAgentManager {
         return new Promise((resolve, reject) => {
             const id = this.nextMessageId++;
             const request = { jsonrpc: '2.0', id, method, params };
+            console.log('[ACP] 📨 Sending request:', method, '| id:', id, '| session:', params?.sessionId?.slice(0, 8) || '-');
 
-            agent.pendingRequests.set(id, { resolve, reject });
+            const startTime = Date.now();
+            agent.pendingRequests.set(id, { resolve, reject, startTime, method });
             agent.process.stdin.write(JSON.stringify(request) + '\n');
 
             setTimeout(() => {
                 if (agent.pendingRequests.has(id)) {
+                    const elapsed = Date.now() - startTime;
+                    console.error('[ACP] ⏰ Request TIMEOUT after', elapsed, 'ms | method:', method, '| id:', id);
                     agent.pendingRequests.delete(id);
                     reject(new Error('Request timeout'));
                 }
-            }, 30000);
+            }, 300000); // 5 minutes timeout for long-running requests
         });
     }
 
@@ -179,30 +353,48 @@ class ACPAgentManager {
             sessionId = sessionResult.sessionId;
             this.sessions.set(composerId, { sessionId, providerId: agent.providerId });
             console.log(`[ACP] Created new session ${sessionId} for composer ${composerId}`);
+
+            // Set permission mode to bypass all permission checks
+            try {
+                await this.sendRequest(agent, 'session/set_mode', {
+                    sessionId: sessionId,
+                    modeId: 'bypassPermissions'
+                });
+                console.log(`[ACP] Set permission mode to bypassPermissions for session ${sessionId}`);
+            } catch (err) {
+                console.log(`[ACP] Could not set permission mode: ${err.message}`);
+            }
         }
 
         const responseChunks = [];
 
-        // Set up listener for response chunks
-        agent.sessionUpdateListener = (params) => {
-            if (params.update?.sessionUpdate === 'agent_message_chunk') {
-                const content = params.update.content;
-                if (content?.type === 'text' && content.text) {
-                    responseChunks.push(content.text);
+        // Register session-specific listener for response chunks
+        const listenerEntry = {
+            chunkSeq: 0,
+            onUpdate: (params) => {
+                if (params.update?.sessionUpdate === 'agent_message_chunk') {
+                    const content = params.update.content;
+                    if (content?.type === 'text' && content.text) {
+                        responseChunks.push(content.text);
+                    }
                 }
             }
         };
+        agent.sessionUpdateListeners.set(sessionId, listenerEntry);
 
-        // Send only the current message
-        const result = await this.sendRequest(agent, 'session/prompt', {
-            sessionId: sessionId,
-            prompt: [{
-                type: 'text',
-                text: message
-            }]
-        });
-
-        delete agent.sessionUpdateListener;
+        let result;
+        try {
+            // Send only the current message
+            result = await this.sendRequest(agent, 'session/prompt', {
+                sessionId: sessionId,
+                prompt: [{
+                    type: 'text',
+                    text: message
+                }]
+            });
+        } finally {
+            agent.sessionUpdateListeners.delete(sessionId);
+        }
 
         console.log(`[ACP] Prompt complete for session ${sessionId}`);
         return {
@@ -276,6 +468,16 @@ async function activate(context) {
             return;
         }
 
+        // GET /acp/debug - show debug notification
+        if (req.method === 'GET' && req.url.startsWith('/acp/debug?')) {
+            const url = new URL(req.url, 'http://localhost');
+            const msg = url.searchParams.get('msg') || 'debug';
+            vscode.window.showInformationMessage(`[ACP] ${msg}`);
+            res.writeHead(200);
+            res.end('ok');
+            return;
+        }
+
         // GET /acp/getSlashCommands - return cached slash commands for a provider
         if (req.method === 'GET' && req.url.startsWith('/acp/getSlashCommands')) {
             const url = new URL(req.url, 'http://localhost');
@@ -283,6 +485,50 @@ async function activate(context) {
             const commands = agentManager.slashCommands.get(providerId) || [];
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(commands));
+            return;
+        }
+
+        // POST /acp/getSession - get or create session for a composer (fast, no slash command wait)
+        if (req.method === 'POST' && req.url === '/acp/getSession') {
+            let body = '';
+            req.on('data', chunk => { body += chunk.toString(); });
+
+            req.on('end', async () => {
+                try {
+                    const { provider, composerId } = JSON.parse(body);
+                    console.log('[ACP] Getting session for composer:', composerId);
+                    vscode.window.showInformationMessage(`[ACP] 1️⃣ getSession called`);
+
+                    const agent = await agentManager.spawnAgent(provider);
+
+                    // Check if we already have a session for this composer
+                    const existingSession = agentManager.sessions.get(composerId);
+                    if (existingSession && existingSession.providerId === agent.providerId) {
+                        console.log('[ACP] Reusing existing session:', existingSession.sessionId);
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ sessionId: existingSession.sessionId }));
+                        return;
+                    }
+
+                    // Create new session
+                    const sessionResult = await agentManager.sendRequest(agent, 'session/new', {
+                        cwd: getWorkspacePath(),
+                        mcpServers: []
+                    });
+                    agentManager.sessions.set(composerId, {
+                        sessionId: sessionResult.sessionId,
+                        providerId: agent.providerId
+                    });
+
+                    console.log('[ACP] Created new session:', sessionResult.sessionId);
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ sessionId: sessionResult.sessionId }));
+                } catch (error) {
+                    console.error('[ACP] Error getting session:', error);
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: true, message: error.message }));
+                }
+            });
             return;
         }
 
@@ -332,36 +578,121 @@ async function activate(context) {
 
             req.on('end', async () => {
                 try {
-                    const { provider, message, composerId } = JSON.parse(body);
-                    const agent = await agentManager.spawnAgent(provider);
-                    const response = await agentManager.sendPrompt(agent, message, composerId);
+                    const { provider, message, composerId, stream } = JSON.parse(body);
 
-                    const result = {
-                        id: `acp-${Date.now()}`,
-                        object: 'chat.completion',
-                        created: Math.floor(Date.now() / 1000),
-                        model: `acp:${provider.id}`,
-                        choices: [{
-                            index: 0,
-                            message: {
-                                role: 'assistant',
-                                content: response.text || '[No response]'
-                            },
-                            finish_reason: 'stop'
-                        }],
-                        usage: {
-                            prompt_tokens: 0,
-                            completion_tokens: 0,
-                            total_tokens: 0
+                    if (stream) {
+                        // Streaming mode - send chunks as NDJSON
+                        res.writeHead(200, {
+                            'Content-Type': 'application/x-ndjson',
+                            'Transfer-Encoding': 'chunked',
+                            'Cache-Control': 'no-cache'
+                        });
+                        if (res.socket) res.socket.setNoDelay(true);
+
+                        const agent = await agentManager.spawnAgent(provider);
+
+                        // Get or create session
+                        let sessionId;
+                        const existingSession = agentManager.sessions.get(composerId);
+                        if (existingSession && existingSession.providerId === agent.providerId) {
+                            sessionId = existingSession.sessionId;
+                        } else {
+                            const sessionResult = await agentManager.sendRequest(agent, 'session/new', {
+                                cwd: getWorkspacePath(),
+                                mcpServers: []
+                            });
+                            sessionId = sessionResult.sessionId;
+                            agentManager.sessions.set(composerId, { sessionId, providerId: agent.providerId });
                         }
-                    };
 
-                    res.writeHead(200, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify(result));
+                        // Always set permission mode (idempotent - safe to call on existing sessions)
+                        try {
+                            await agentManager.sendRequest(agent, 'session/set_mode', {
+                                sessionId: sessionId,
+                                modeId: 'bypassPermissions'
+                            });
+                            console.log(`[ACP] Set permission mode to bypassPermissions for session ${sessionId}`);
+                        } catch (err) {
+                            console.log(`[ACP] Could not set permission mode: ${err.message}`);
+                        }
+
+                        // Register session-specific streaming listener (keyed by sessionId to avoid race conditions)
+                        const listenerEntry = {
+                            chunkSeq: 0,
+                            onUpdate: (params) => {
+                                const update = params.update;
+
+                                if (update?.sessionUpdate === 'agent_message_chunk') {
+                                    let textContent = '';
+                                    if (typeof update.content === 'string') {
+                                        textContent = update.content;
+                                    } else if (update.content?.type === 'text') {
+                                        textContent = update.content.text || '';
+                                    } else if (update.content?.text) {
+                                        textContent = update.content.text;
+                                    }
+                                    if (textContent) {
+                                        const seq = listenerEntry.chunkSeq++;
+                                        console.log(`[ACP] 📝 Chunk session=${sessionId.slice(0, 8)} seq=${seq} len=${textContent.length} preview="${textContent.slice(0, 30).replace(/\n/g, '\\n')}..."`);
+                                        res.write(JSON.stringify({ type: 'text', content: textContent, seq }) + '\n');
+                                    }
+                                } else if (update?.sessionUpdate === 'tool_call' || update?.sessionUpdate === 'tool_call_update') {
+                                    console.log(`[ACP] 🔧 Tool session=${sessionId.slice(0, 8)} event=${update.sessionUpdate} status=${update.status || 'pending'}`);
+                                    res.write(JSON.stringify({ type: 'tool', ...update }) + '\n');
+                                }
+                            }
+                        };
+                        agent.sessionUpdateListeners.set(sessionId, listenerEntry);
+                        console.log(`[ACP] 📡 Registered listener for session ${sessionId.slice(0, 8)} (total: ${agent.sessionUpdateListeners.size})`);
+
+                        try {
+                            // Send prompt and wait for completion
+                            await agentManager.sendRequest(agent, 'session/prompt', {
+                                sessionId: sessionId,
+                                prompt: [{ type: 'text', text: message }]
+                            });
+
+                            // Send done marker and end
+                            res.write(JSON.stringify({ type: 'done' }) + '\n');
+                            res.end();
+                        } finally {
+                            // Always clean up listener
+                            agent.sessionUpdateListeners.delete(sessionId);
+                            console.log(`[ACP] 📡 Unregistered listener for session ${sessionId.slice(0, 8)} (remaining: ${agent.sessionUpdateListeners.size})`);
+                        }
+                    } else {
+                        // Non-streaming mode (original behavior)
+                        const agent = await agentManager.spawnAgent(provider);
+                        const response = await agentManager.sendPrompt(agent, message, composerId);
+
+                        const result = {
+                            id: `acp-${Date.now()}`,
+                            object: 'chat.completion',
+                            created: Math.floor(Date.now() / 1000),
+                            model: `acp:${provider.id}`,
+                            choices: [{
+                                index: 0,
+                                message: {
+                                    role: 'assistant',
+                                    content: response.text || '[No response]'
+                                },
+                                finish_reason: 'stop'
+                            }],
+                            usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
+                        };
+
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify(result));
+                    }
                 } catch (error) {
                     console.error('[ACP] Error:', error);
-                    res.writeHead(500, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ error: true, message: error.message }));
+                    if (!res.headersSent) {
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: true, message: error.message }));
+                    } else {
+                        // Headers already sent (streaming), just end the response
+                        res.end();
+                    }
                 }
             });
         } else {

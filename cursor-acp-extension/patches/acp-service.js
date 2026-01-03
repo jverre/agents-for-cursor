@@ -154,6 +154,16 @@ try {
         };
       }
     }
+
+    // Get or create session ID for a composer
+    getSessionId(composerId) {
+      return this.sessions.get(composerId)?.sessionId;
+    }
+
+    // Store session ID for a composer
+    setSessionId(composerId, sessionId) {
+      this.sessions.set(composerId, { sessionId });
+    }
   }
 
   // Create global ACP service instance
