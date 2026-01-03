@@ -88,7 +88,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
 
           // Simple state: accumulate text, track tool bubbles and their types
           const stateKey = `_acp_${composerId}`;
-          window[stateKey] = { text: '', bubbleId: responseBubbleId, toolBubbles: new Map(), toolNames: new Map() };
+          window[stateKey] = { text: '', bubbleId: responseBubbleId, toolBubbles: new Map() };
 
           const acpResponse = await window.acpExtensionBridge.sendMessage(
             provider,
@@ -124,7 +124,6 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
 
               onToolCall: (tc) => {
                 const dbg = (msg) => fetch(`http://localhost:37842/acp/debug?msg=${encodeURIComponent(msg)}`).catch(() => {});
-
                 dbg(`🔧 onToolCall: ${tc.sessionUpdate} | ${tc.status || 'no-status'} | FULL_ID=${tc.toolCallId || 'none'}`);
 
                 const s = window[stateKey];
@@ -132,75 +131,16 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                 const isNew = tc.sessionUpdate === 'tool_call';
                 const isComplete = tc.status === 'completed';
                 const isFailed = tc.status === 'failed';
-                // Priority: name/tool (actual tool name) > title (display) > kind
-                const rawToolName = tc.name || tc.tool || tc.title || tc.kind || 'Tool';
+                // Use tool name from ACP directly
+                const toolName = tc.name || tc.tool || tc.title || tc.kind || 'Tool';
 
-                // Normalize tool names from display titles to actual tool names
-                const TOOL_NAME_MAP = {
-                  'Read File': 'Read', 'Read': 'Read',
-                  'Edit File': 'Edit', 'Edit': 'Edit',
-                  'Write File': 'Write', 'Write': 'Write',
-                  'List Directory': 'LS', 'LS': 'LS',
-                  'Grep': 'Grep', 'Search': 'Grep',
-                  'Glob': 'Glob', 'Find': 'Glob',
-                  'Bash': 'Bash', 'Terminal': 'Bash', 'Run Command': 'Bash',
-                  'BashOutput': 'BashOutput',
-                  'KillShell': 'KillShell',
-                  'WebFetch': 'WebFetch', 'Fetch': 'WebFetch',
-                  'WebSearch': 'WebSearch', 'Web Search': 'WebSearch',
-                  'Task': 'Task', 'Agent': 'Task',
-                  'TodoWrite': 'TodoWrite', 'Todo': 'TodoWrite',
-                  'TodoRead': 'TodoRead',
-                  'ExitPlanMode': 'ExitPlanMode', 'Plan': 'ExitPlanMode',
-                  'NotebookRead': 'NotebookRead', 'NotebookEdit': 'NotebookEdit',
-                  'LSP': 'LSP',
-                  'AskUserQuestion': 'AskUserQuestion', 'Question': 'AskUserQuestion',
-                };
-                // Try exact match first, then prefix match for dynamic titles
-                let toolName = TOOL_NAME_MAP[rawToolName];
-                if (!toolName) {
-                  // Check if rawToolName starts with any known prefix
-                  for (const [prefix, name] of Object.entries(TOOL_NAME_MAP)) {
-                    if (rawToolName.startsWith(prefix)) {
-                      toolName = name;
-                      break;
-                    }
-                  }
-                }
-                toolName = toolName || 'Read'; // Default
+                // Use Cursor's TOOL_FORMER capabilityType (15) so bubbles render
+                // Use custom tool type 90 - need to patch React renderer to handle it
+                const TOOL_FORMER_CAPABILITY = 15;  // Cursor's $s.TOOL_FORMER
+                const ACP_TOOL_TYPE = 90;  // Custom ACP tool type
 
-                // Map ACP tools to Cursor's internal tool IDs to avoid approval UI
-                // MCP (49) requires approval - internal tools don't
-                const ACP_TOOL_MAP = {
-                  // File operations
-                  'Read': 40,           // READ_FILE_V2
-                  'Edit': 38,           // EDIT_FILE_V2
-                  'Write': 38,          // EDIT_FILE_V2
-                  'LS': 39,             // LIST_DIR_V2
-                  // Search operations
-                  'Grep': 41,           // RIPGREP_RAW_SEARCH
-                  'Glob': 42,           // GLOB_FILE_SEARCH
-                  // Terminal
-                  'Bash': 15,           // RUN_TERMINAL_COMMAND_V2
-                  'BashOutput': 15,     // RUN_TERMINAL_COMMAND_V2
-                  'KillShell': 15,      // RUN_TERMINAL_COMMAND_V2
-                  // Web
-                  'WebFetch': 18,       // WEB_SEARCH
-                  'WebSearch': 18,      // WEB_SEARCH
-                  // Tasks & Planning
-                  'Task': 48,           // TASK_V2
-                  'TodoWrite': 35,      // TODO_WRITE
-                  'TodoRead': 34,       // TODO_READ
-                  'ExitPlanMode': 43,   // CREATE_PLAN
-                  // Notebook
-                  'NotebookRead': 40,   // READ_FILE_V2 (closest match)
-                  'NotebookEdit': 38,   // EDIT_FILE_V2 (closest match)
-                  // Code navigation
-                  'LSP': 31,            // GO_TO_DEFINITION
-                  // Questions
-                  'AskUserQuestion': 51, // ASK_QUESTION
-                };
-                const acpToolId = ACP_TOOL_MAP[toolName] || 40; // Default to READ_FILE
+                // All ACP tools use the unified ACP type
+                const acpToolId = ACP_TOOL_TYPE;
 
                 // Debug: show all tool bubble IDs in map
                 const existingIds = Array.from(s.toolBubbles.keys()).map(id => id?.slice(0,12)).join(',');
@@ -211,189 +151,91 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                 const inputObj = typeof toolInput === 'string' ? (() => { try { return JSON.parse(toolInput); } catch { return {}; } })() : toolInput;
                 const hasInput = Object.keys(inputObj).length > 0;
 
-                // Helper to build params based on tool type
-                const buildParams = (name, input, title) => {
-                  switch (name) {
-                    case 'Read':
-                      return input.file_path ? { targetFile: input.file_path, effectiveUri: `file://${input.file_path}`, limit: input.limit, offset: input.offset } : {};
-                    case 'Edit':
-                      return input.file_path ? { targetFile: input.file_path, effectiveUri: `file://${input.file_path}`, oldString: input.old_string, newString: input.new_string } : {};
-                    case 'Write':
-                      return input.file_path ? { targetFile: input.file_path, effectiveUri: `file://${input.file_path}`, content: input.content } : {};
-                    case 'LS':
-                      return { targetDirectory: input.path || '.' };
-                    case 'Grep':
-                      return { pattern: input.pattern, path: input.path, glob: input.glob, outputMode: input.output_mode };
-                    case 'Glob':
-                      return { globPattern: input.pattern, targetDirectory: input.path };
-                    case 'Bash':
-                    case 'BashOutput': {
-                      // Command from input.command, or extract from backtick-quoted title
-                      const titleCmd = title?.match(/`([^`]+)`/)?.[1] || '';
-                      const cmd = input.command || titleCmd || '';
-                      return {
-                        command: cmd,
-                        requireUserApproval: false,
-                        parsingResult: {
-                          executableCommands: [{
-                            name: cmd.split(' ')[0] || 'cmd',
-                            args: cmd.split(' ').slice(1).map(a => ({ type: 'word', value: a })),
-                            fullText: cmd
-                          }]
-                        }
-                      };
-                    }
-                    case 'WebFetch':
-                      return { url: input.url, prompt: input.prompt };
-                    case 'WebSearch':
-                      return { query: input.query };
-                    case 'Task':
-                      return { description: input.description, prompt: input.prompt };
-                    default:
-                      return {};
-                  }
-                };
-
-                // On first tool_call for this ID, create bubble immediately
+                // On first tool_call for this ID, create a tool bubble
                 if (isNew && !s.toolBubbles.has(toolCallId)) {
                   s.bubbleId = null;
                   s.text = '';
 
+                  // Create a single formatted text bubble for the tool call
                   const toolBubbleId = gen();
                   s.toolBubbles.set(toolCallId, toolBubbleId);
-                  s.toolNames.set(toolCallId, toolName);
 
-                  const CURSOR_TOOL_NAMES = {
-                    'Bash': 'run_terminal_cmd', 'BashOutput': 'run_terminal_cmd',
-                    'Read': 'read_file', 'Edit': 'edit_file', 'Write': 'write_file',
-                    'Grep': 'grep_search', 'Glob': 'file_search', 'LS': 'list_dir',
-                    'WebSearch': 'web_search', 'WebFetch': 'web_fetch',
-                    'Task': 'task', 'TodoWrite': 'todo_write',
-                  };
-                  const cursorToolName = CURSOR_TOOL_NAMES[toolName] || toolName.toLowerCase().replace(/\s+/g, '_');
-                  const params = buildParams(toolName, inputObj, tc.title);
-
-                  // HARDCODED for testing - exact format from working Cursor DB
+                  // ACP Tool Bubble - simplified structure
+                  // toolFormerData fields: tool, status, name, rawArgs (input JSON), result (output JSON)
                   const toolBubble = {
-                    _v: 3,
                     bubbleId: toolBubbleId,
                     type: 2,
                     text: '',
                     richText: '',
                     codeBlocks: [],
                     createdAt: new Date().toISOString(),
-                    capabilityType: 15,
-                    isAgentic: false,
-                    approximateLintErrors: [],
-                    lints: [],
-                    toolResults: [],
-                    capabilities: [],
-                    capabilityStatuses: {},
-                    supportedTools: [],
-                    tokenCount: { inputTokens: 0, outputTokens: 0 },
+                    capabilityType: TOOL_FORMER_CAPABILITY,
                     toolFormerData: {
-                      tool: 15,
-                      toolIndex: 0,
-                      modelCallId: gen(),
+                      tool: ACP_TOOL_TYPE,
                       toolCallId: toolCallId,
                       status: 'loading',
-                      rawArgs: '{"command": "echo chicken", "is_background": false}',
-                      name: 'run_terminal_cmd',
-                      params: '{"command":"echo chicken","requireUserApproval":true,"parsingResult":{"executableCommands":[{"name":"echo","args":[{"type":"word","value":"chicken"}],"fullText":"echo chicken"}]}}',
-                      additionalData: {}
+                      name: toolName,
+                      rawArgs: JSON.stringify(inputObj),
+                      result: null
                     }
                   };
 
-                  dbg(`🔧 Creating bubble: ${toolBubbleId.slice(0,8)} tool=${toolName} hasInput=${hasInput}`);
-
-                  // Show notification with available data for debugging
-                  try {
-                    const debugData = {
-                      toolName,
-                      rawToolName,
-                      hasInput,
-                      'tc.title': tc.title,
-                      'tc.name': tc.name,
-                      'tc.tool': tc.tool,
-                      'inputObj.command': inputObj?.command,
-                      'params.command': params?.command
-                    };
-                    console.log('[ACP DEBUG DATA]', debugData);
-                    alert('[ACP Debug]\n' + JSON.stringify(debugData, null, 2));
-                  } catch (e) {}
+                  dbg(`🔧 Creating tool bubble: id=${toolBubbleId.slice(0,8)} name=${toolName} capType=${toolBubble.capabilityType} toolType=${toolBubble.toolFormerData?.tool}`);
                   try {
                     svc.appendComposerBubbles(composerHandle, [toolBubble]);
+                    dbg(`🔧 Tool bubble appended OK`);
                     svc.updateComposerDataSetStore({{e}}, u => {
                       u("generatingBubbleIds", [toolBubbleId]);
                       u("currentBubbleId", toolBubbleId);
                     });
                   } catch (err) {
                     dbg(`🔧 Create ERROR: ${err.message}`);
+                    console.error('[ACP] Tool bubble create failed:', err);
                   }
                 }
 
-                // Update params when we receive new data (subsequent tool_call with input)
+                // Update rawArgs when we receive input data
                 if (isNew && s.toolBubbles.has(toolCallId) && hasInput) {
                   const toolBubbleId = s.toolBubbles.get(toolCallId);
-                  const params = buildParams(toolName, inputObj, tc.title);
-                  const rawArgs = (toolName === 'Bash' || toolName === 'BashOutput')
-                    ? { command: params.command || '', is_background: false }
-                    : inputObj;
-                  dbg(`🔧 Updating params for ${toolBubbleId.slice(0,8)}: cmd=${params.command?.slice(0,20)}`);
-
-                  // Debug alert for update
-                  alert('[ACP UPDATE]\ntitle: ' + tc.title + '\ncommand: ' + (inputObj?.command || params?.command));
+                  dbg(`🔧 Updating rawArgs for ${toolBubbleId.slice(0,8)}`);
                   try {
                     svc.updateComposerDataSetStore({{e}}, u => {
-                      u("conversationMap", toolBubbleId, "toolFormerData", "params", JSON.stringify(params));
-                      u("conversationMap", toolBubbleId, "toolFormerData", "rawArgs", JSON.stringify(rawArgs));
+                      u("conversationMap", toolBubbleId, "toolFormerData", "rawArgs", JSON.stringify(inputObj));
                     });
                   } catch (err) {
-                    dbg(`🔧 Update params ERROR: ${err.message}`);
+                    dbg(`🔧 Update rawArgs ERROR: ${err.message}`);
                   }
                 }
 
+                // Check for tool_result event as completion indicator
+                const isToolResult = tc.sessionUpdate === 'tool_result';
+
                 // Update tool bubble on completion
-                if (isComplete || isFailed) {
+                if (isComplete || isFailed || isToolResult) {
                   const toolBubbleId = s.toolBubbles.get(toolCallId);
-                  const cachedToolName = s.toolNames?.get(toolCallId) || toolName;
-                  dbg(`🔧 ${isFailed ? 'Failed' : 'Completion'}: bubbleId=${toolBubbleId?.slice(0,8) || 'none'} tool=${cachedToolName}`);
+                  dbg(`🔧 Completion: bubbleId=${toolBubbleId?.slice(0,8) || 'none'}`);
 
                   if (toolBubbleId) {
                     try {
-                      // Format result based on tool type
-                      let resultStr;
                       const finalStatus = isFailed ? 'error' : 'completed';
 
-                      if (cachedToolName === 'Bash' || cachedToolName === 'BashOutput') {
-                        // Terminal result format - extract output from ACP response
-                        let output = '';
-                        if (Array.isArray(tc.result)) {
-                          // ACP format: [{type: 'text', text: 'output'}]
-                          output = tc.result.map(r => r.text || '').join('');
-                        } else if (typeof tc.result === 'string') {
-                          output = tc.result;
-                        } else if (tc.content) {
-                          output = typeof tc.content === 'string' ? tc.content : JSON.stringify(tc.content);
-                        }
-                        resultStr = JSON.stringify({
-                          output: output,
-                          rejected: false,
-                          notInterrupted: true,
-                          endedReason: isFailed ? 'RUN_TERMINAL_COMMAND_ENDED_REASON_ERROR' : 'RUN_TERMINAL_COMMAND_ENDED_REASON_EXECUTION_COMPLETED',
-                          exitCodeV2: isFailed ? 1 : 0
-                        });
-                      } else {
-                        // Default: stringify result
-                        const toolResult = tc.result || tc.content || (isFailed ? 'Tool execution failed' : '');
-                        resultStr = typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult);
+                      // Extract output from ACP response
+                      let output = '';
+                      if (Array.isArray(tc.result)) {
+                        output = tc.result.map(r => r.text || '').join('');
+                      } else if (typeof tc.result === 'string') {
+                        output = tc.result;
+                      } else if (tc.content) {
+                        output = typeof tc.content === 'string' ? tc.content : JSON.stringify(tc.content);
+                      } else if (isFailed) {
+                        output = 'Tool execution failed';
                       }
 
                       svc.updateComposerDataSetStore({{e}}, u => {
                         u("conversationMap", toolBubbleId, "toolFormerData", "status", finalStatus);
-                        u("conversationMap", toolBubbleId, "toolFormerData", "result", resultStr);
+                        u("conversationMap", toolBubbleId, "toolFormerData", "result", output);
                       });
-                      dbg(`🔧 Marked ${finalStatus} OK (native) with result`);
+                      dbg(`🔧 Marked ${finalStatus}`);
                     } catch (err) {
                       dbg(`🔧 Status update ERROR: ${err.message}`);
                     }
