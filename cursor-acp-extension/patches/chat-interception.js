@@ -131,8 +131,8 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                 const isNew = tc.sessionUpdate === 'tool_call';
                 const isComplete = tc.status === 'completed';
                 const isFailed = tc.status === 'failed';
-                // Use tool name from ACP directly
-                const toolName = tc.name || tc.tool || tc.title || tc.kind || 'Tool';
+                // Use tool kind from ACP (e.g., "read", "edit", "bash")
+                const toolName = tc.kind || 'tool';
 
                 // Use Cursor's TOOL_FORMER capabilityType (15) so bubbles render
                 // Use custom tool type 90 - need to patch React renderer to handle it
