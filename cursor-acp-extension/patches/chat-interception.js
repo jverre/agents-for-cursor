@@ -144,7 +144,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
 
                 // Debug: show all tool bubble IDs in map
                 const existingIds = Array.from(s.toolBubbles.keys()).map(id => id?.slice(0,12)).join(',');
-                dbg(`🔧 isNew=${isNew} complete=${isComplete} failed=${isFailed} raw=${rawToolName?.slice(0,15)} name=${toolName} toolId=${acpToolId} existing=[${existingIds}]`);
+                dbg(`🔧 isNew=${isNew} complete=${isComplete} failed=${isFailed} name=${toolName} toolId=${acpToolId} existing=[${existingIds}]`);
 
                 // Get tool input - may be empty on first event, populated on subsequent
                 const toolInput = tc.input || tc.rawInput || {};
