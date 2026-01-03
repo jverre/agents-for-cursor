@@ -24,8 +24,6 @@ class ACPAgentManager {
         this.agents = new Map(); // Map<providerId, AgentProcess>
         this.sessions = new Map(); // Map<composerId, { sessionId, providerId }>
         this.slashCommands = new Map(); // Map<providerId, AvailableCommand[]>
-        this.toolCallListeners = new Map(); // Map<sessionId, Set<response>> for SSE
-        this.toolCallNames = new Map(); // Map<toolCallId, toolName> - cache names for updates
         this.terminals = new Map(); // Map<terminalId, { process, output, exitCode, done }>
         this.nextMessageId = 1;
         this.nextTerminalId = 1;
@@ -214,7 +212,7 @@ class ACPAgentManager {
                         console.log('[ACP] Received', agent.slashCommands.length, 'slash commands');
                     }
 
-                    // Handle agent_message_chunk - stream text to SSE listeners
+                    // Handle agent_message_chunk - extract text content
                     if (update?.sessionUpdate === 'agent_message_chunk') {
                         // Extract text from content - may be nested as { type: 'text', text: '...' }
                         let textContent = '';
@@ -230,63 +228,11 @@ class ACPAgentManager {
                         if (!textContent) {
                             return;
                         }
-
-                        const listeners = this.toolCallListeners.get(sessionId);
-                        if (listeners && listeners.size > 0) {
-                            const chunkData = JSON.stringify({
-                                type: 'agent_message_chunk',
-                                content: textContent
-                            });
-                            for (const listener of listeners) {
-                                listener.write(`data: ${chunkData}\n\n`);
-                            }
-                        }
                     }
 
-                    // Handle tool_call and tool_call_update - stream to SSE listeners
+                    // Log tool events for debugging
                     if (update?.sessionUpdate === 'tool_call' || update?.sessionUpdate === 'tool_call_update') {
-                        const toolCallId = update.toolCallId;
-                        console.log('[ACP] Tool event:', update.sessionUpdate, '| id:', toolCallId?.slice(0, 8), '| status:', update.status, '| kind:', update.kind);
-
-                        // Extract tool name from _meta.claudeCode.toolName (e.g., "mcp__acp__Bash" -> "Bash")
-                        let toolName = 'unknown';
-                        const metaToolName = update._meta?.claudeCode?.toolName;
-                        if (metaToolName) {
-                            // Extract last part: "mcp__acp__Bash" -> "Bash"
-                            const parts = metaToolName.split('__');
-                            toolName = parts[parts.length - 1] || metaToolName;
-                        } else if (update.title) {
-                            toolName = update.title.split(' ')[0] || update.kind || 'unknown';
-                        }
-
-                        // Cache tool name for updates (which may not have _meta)
-                        if (toolCallId && toolName !== 'unknown') {
-                            this.toolCallNames.set(toolCallId, toolName);
-                        } else if (toolCallId && this.toolCallNames.has(toolCallId)) {
-                            toolName = this.toolCallNames.get(toolCallId);
-                        } else if (update.kind) {
-                            toolName = update.kind;
-                        }
-
-                        const listeners = this.toolCallListeners.get(sessionId);
-                        if (listeners && listeners.size > 0) {
-                            const toolData = JSON.stringify({
-                                type: update.sessionUpdate,
-                                toolCallId: toolCallId,
-                                name: toolName,
-                                tool: toolName,
-                                title: update.title,
-                                kind: update.kind,
-                                status: update.status,
-                                rawInput: update.rawInput,
-                                input: update.rawInput,
-                                content: update.content,
-                                result: update._meta?.claudeCode?.toolResponse || update.content
-                            });
-                            for (const listener of listeners) {
-                                listener.write(`data: ${toolData}\n\n`);
-                            }
-                        }
+                        console.log('[ACP] Tool event:', update.sessionUpdate, '| id:', update.toolCallId?.slice(0, 8), '| status:', update.status, '| kind:', update.kind);
                     }
 
                     // Forward to session-specific listener (routes by sessionId to avoid race conditions)
@@ -522,50 +468,6 @@ async function activate(context) {
             return;
         }
 
-        // GET /acp/stream/:sessionId - Server-Sent Events for streaming updates
-        if (req.method === 'GET' && req.url.startsWith('/acp/stream/')) {
-            const sessionId = decodeURIComponent(req.url.split('/acp/stream/')[1]);
-            console.log('[ACP] SSE stream requested for session:', sessionId);
-            vscode.window.showInformationMessage(`[ACP] 🔵 Browser SSE request for: ${sessionId?.slice(0,8)}`);
-
-            res.setHeader('Content-Type', 'text/event-stream');
-            res.setHeader('Cache-Control', 'no-cache');
-            res.setHeader('Connection', 'keep-alive');
-            res.flushHeaders();
-
-            // Disable Nagle's algorithm to send data immediately
-            if (res.socket) {
-                res.socket.setNoDelay(true);
-            }
-
-            // Register this response as a listener
-            if (!agentManager.toolCallListeners.has(sessionId)) {
-                agentManager.toolCallListeners.set(sessionId, new Set());
-            }
-            agentManager.toolCallListeners.get(sessionId).add(res);
-            vscode.window.showInformationMessage(`[ACP] 2️⃣ SSE listener registered for ${sessionId?.slice(0,8)}`);
-
-            // Send initial connection message
-            const connectMsg = `data: ${JSON.stringify({ type: 'connected', sessionId })}\n\n`;
-            res.write(connectMsg);
-            res.uncork && res.uncork();  // Force flush
-            vscode.window.showInformationMessage(`[ACP] 3️⃣ Sent "connected" event to browser`);
-
-            // Cleanup on close
-            req.on('close', () => {
-                console.log('[ACP] SSE stream closed for session:', sessionId);
-                const listeners = agentManager.toolCallListeners.get(sessionId);
-                if (listeners) {
-                    listeners.delete(res);
-                    if (listeners.size === 0) {
-                        agentManager.toolCallListeners.delete(sessionId);
-                    }
-                }
-            });
-
-            return;
-        }
-
         // GET /acp/debug - show debug notification
         if (req.method === 'GET' && req.url.startsWith('/acp/debug?')) {
             const url = new URL(req.url, 'http://localhost');
@@ -788,7 +690,7 @@ async function activate(context) {
                         res.writeHead(500, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: true, message: error.message }));
                     } else {
-                        // Headers already sent (e.g., SSE stream), just end the response
+                        // Headers already sent (streaming), just end the response
                         res.end();
                     }
                 }

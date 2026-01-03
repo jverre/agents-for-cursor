@@ -7,8 +7,6 @@ try {
       this.providers = new Map();
       this.sessions = new Map();
       this.slashCommands = new Map(); // Map<providerId, AvailableCommand[]>
-      this.activeStreams = new Map(); // Map<sessionId, EventSource>
-      this.streamCallbacks = new Map(); // Map<sessionId, {onTextChunk, onToolCall}>
       console.log("[ACP] ACPService initialized");
 
       // Add test provider (will load from config file later)
@@ -155,64 +153,6 @@ try {
           message: `ACP error: ${error.message}`
         };
       }
-    }
-
-    // Set callbacks for streaming updates (keyed by sessionId)
-    setStreamCallbacks(sessionId, callbacks) {
-      console.log('[ACP] Setting stream callbacks for session:', sessionId?.slice(0, 12));
-      this.streamCallbacks.set(sessionId, callbacks);
-    }
-
-    // Legacy method for backwards compatibility
-    setToolCallListener(sessionId, callback) {
-      const existing = this.streamCallbacks.get(sessionId) || {};
-      this.streamCallbacks.set(sessionId, { ...existing, onToolCall: callback });
-    }
-
-    // Start streaming updates for a session
-    // Returns a Promise that resolves when stream is connected
-    async startStreaming(sessionId) {
-      // Close existing stream if any
-      this.stopStreaming(sessionId);
-
-      if (!window.acpExtensionBridge?.subscribeToStream) {
-        console.warn('[ACP] Extension bridge does not support streaming');
-        return;
-      }
-
-      console.log('[ACP] Starting stream for session:', sessionId?.slice(0, 12));
-
-      const stream = await window.acpExtensionBridge.subscribeToStream(sessionId, {
-        onTextChunk: (content) => {
-          console.log('[ACP Service] onTextChunk:', content?.length, 'chars');
-          const callbacks = this.streamCallbacks.get(sessionId);
-          console.log('[ACP Service] Callbacks found:', !!callbacks?.onTextChunk);
-          if (callbacks?.onTextChunk) {
-            callbacks.onTextChunk(content);
-          }
-        },
-        onToolCall: (toolCall) => {
-          console.log('[ACP Service] onToolCall:', toolCall.name || toolCall.tool);
-          const callbacks = this.streamCallbacks.get(sessionId);
-          if (callbacks?.onToolCall) {
-            callbacks.onToolCall(toolCall);
-          }
-        }
-      });
-
-      this.activeStreams.set(sessionId, stream);
-      console.log('[ACP] Stream connected for session:', sessionId?.slice(0, 12));
-    }
-
-    // Stop streaming for a session
-    stopStreaming(sessionId) {
-      const stream = this.activeStreams.get(sessionId);
-      if (stream) {
-        console.log('[ACP] Stopping stream for session:', sessionId?.slice(0, 12));
-        if (stream.close) stream.close();
-        this.activeStreams.delete(sessionId);
-      }
-      this.streamCallbacks.delete(sessionId);
     }
 
     // Get or create session ID for a composer
