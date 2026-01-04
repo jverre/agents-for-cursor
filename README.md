@@ -12,7 +12,7 @@
 
 Using Claude Code or Codex in Cursor is painful, yet another Terminal UI or chat sidebar to manage. With 'Agents for Cursor', you can use Claude code directly from the Cursor Chat sidebar.
 
-![Homepage](https://github.com/jverre/agents-for-cursor/raw/main/docs/img/homepage.png)
+![Homepage](https://raw.githubusercontent.com/jverre/agents-for-cursor/main/docs/img/homepage.png)
 
 ## Features
 
@@ -36,7 +36,7 @@ In addition, the following is currently work in progress:
 > This extension works by modifying core Cursor files and my corrupt the installation.
 
 To install the extension:
-1. <a href="vscode:extension/jverre.agents-for-cursor">Click here to install</a> or search for "Agents for Cursor" in the extensions tab and click "Install".
+1. <a href="cursor:extension/jverre.agents-for-cursor">Click here to install</a> or search for "Agents for Cursor" in the extensions tab and click "Install".
 2. Once installed, you will be prompted to "Enable" the extension and restart Cursor.
 3. Install Claude Code and run "/login" to run the auth process
 

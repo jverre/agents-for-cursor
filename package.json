@@ -44,8 +44,7 @@
     "test:watch": "jest --watch",
     "test:ci": "jest --coverage --ci",
     "download-cursor": "node tests/helpers/cursor-installer.js download",
-    "package": "npx vsce package --no-dependencies --allow-star-activation",
-    "launch": "node scripts/launch-cursor.js"
+    "package": "npx vsce package --no-dependencies --allow-star-activation"
   },
   "devDependencies": {
     "@playwright/test": "^1.40.0",
