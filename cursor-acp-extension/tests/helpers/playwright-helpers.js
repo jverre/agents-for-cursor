@@ -73,7 +73,7 @@ class CursorAutomation {
     const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
     await this.mainWindow.keyboard.press(`${modifier}+Shift+P`);
     if (screenshotPrefix) {
-      await this.screenshot(`${screenshotPrefix}b-command-palette-opened.png`);
+      await this.screenshot(`${screenshotPrefix}a-command-palette-opened.png`);
     }
 
     await this.mainWindow.waitForSelector('[placeholder*="command"]', { timeout: 5000 });
@@ -81,26 +81,26 @@ class CursorAutomation {
     await this.mainWindow.keyboard.type(commandName);
     await this.sleep(300);
     if (screenshotPrefix) {
-      await this.screenshot(`${screenshotPrefix}c-command-typed.png`);
+      await this.screenshot(`${screenshotPrefix}b-command-typed.png`);
     }
 
     await this.mainWindow.keyboard.press('Enter');
     await this.sleep(1000); // Give more time for command to execute
     if (screenshotPrefix) {
-      await this.screenshot(`${screenshotPrefix}d-command-executed.png`);
+      await this.screenshot(`${screenshotPrefix}c-command-executed.png`);
     }
     console.log(`[Test] Command executed: ${commandName}`);
   }
 
   async enableACP() {
-    await this.screenshot('02a-before-acp-enable.png');
-    await this.executeCommand('Agents for Cursor: Enable', '02');
-    await this.screenshot('02e-after-acp-enable-command.png');
+    await this.screenshot('0-setup-1-before-acp-enable.png');
+    await this.executeCommand('Agents for Cursor: Enable', '0-setup-2');
+    await this.screenshot('0-setup-3-after-acp-enable-command.png');
 
     // Wait for patches to be applied (need more time for the command to complete)
     console.log('[Test] Waiting 5 seconds for patches to be applied...');
     await this.sleep(5000);
-    await this.screenshot('02f-after-wait-5s.png');
+    await this.screenshot('0-setup-4-after-wait-5s.png');
 
     // Restart to apply patches
     await this.restart();
@@ -158,7 +158,7 @@ class CursorAutomation {
 
     // Take screenshot of dropdown for debugging
     if (screenshotPrefix) {
-      await this.screenshot(`${screenshotPrefix}b-dropdown-opened.png`);
+      await this.screenshot(`${screenshotPrefix}a-dropdown-opened.png`);
     }
 
     // Check if Auto is currently enabled
@@ -188,7 +188,7 @@ class CursorAutomation {
           await toggleSwitch.click();
           await this.sleep(300);
           if (screenshotPrefix) {
-            await this.screenshot(`${screenshotPrefix}c-auto-disabled.png`);
+            await this.screenshot(`${screenshotPrefix}b-auto-disabled.png`);
           }
         }
       }
@@ -203,7 +203,7 @@ class CursorAutomation {
         await this.sleep(300);
       } catch (error) {
         if (screenshotPrefix) {
-          await this.screenshot(`${screenshotPrefix}x-model-not-found.png`);
+          await this.screenshot(`${screenshotPrefix}z-model-not-found.png`);
         }
         throw error;
       }

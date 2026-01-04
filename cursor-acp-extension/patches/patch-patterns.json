@@ -14,5 +14,31 @@
   "asyncCursorCmdsOriginalBody": "(await this.initialize(),Array.from(this.commands.values()))",
 
   "dropdownCallSearch": "const g=await h.cursorCommandsService.getCommands()",
-  "dropdownCallReplace": "const g=(await h.cursorCommandsService.getCommands()).filter(_c=>!_c.isACP||i.props?.composerDataHandle?.data?.modelConfig?.modelName?.startsWith(\"acp:\"))"
+  "dropdownCallReplace": "const g=(await h.cursorCommandsService.getCommands()).filter(_c=>!_c.isACP||i.props?.composerDataHandle?.data?.modelConfig?.modelName?.startsWith(\"acp:\"))",
+
+  "acpToolReviewSearch": "if(r.tool===bt.MCP||r.tool===bt.CALL_MCP_TOOL){const o=new vdt(n,t);return this._reviewModelCache.set(t,o),o}",
+  "acpToolReviewReplace": "if(r.tool===90||r.tool===bt.ACP_TOOL){const o=new vdt(n,t);return this._reviewModelCache.set(t,o),o}if(r.tool===bt.MCP||r.tool===bt.CALL_MCP_TOOL){const o=new vdt(n,t);return this._reviewModelCache.set(t,o),o}",
+
+  "acpToolBubbleRenderSearch": "r.tool===bt.MCP||r.tool===bt.CALL_MCP_TOOL",
+  "acpToolBubbleRenderReplace": "r.tool===90||r.tool===bt.ACP_TOOL||r.tool===bt.MCP||r.tool===bt.CALL_MCP_TOOL",
+
+  "_comment_enum": "Register ACP_TOOL in bt enum (tool types)",
+  "btEnumSearch": "i[i.WRITE_SHELL_STDIN=55]=\"WRITE_SHELL_STDIN\",i))(Ede||{})",
+  "btEnumReplace": "i[i.WRITE_SHELL_STDIN=55]=\"WRITE_SHELL_STDIN\",i[i.ACP_TOOL=90]=\"ACP_TOOL\",i))(Ede||{})",
+
+  "_comment_verbs": "Add verb labels for ACP_TOOL in pN function",
+  "verbLabelsSearch": "case bt.CALL_MCP_TOOL:return[\"Calling MCP tool\",\"Called MCP tool\",\"Call MCP tool\"]",
+  "verbLabelsReplace": "case bt.CALL_MCP_TOOL:return[\"Calling MCP tool\",\"Called MCP tool\",\"Call MCP tool\"];case bt.ACP_TOOL:return[\"Running ACP tool\",\"Ran ACP tool\",\"Run ACP tool\"]",
+
+  "_comment_toolname": "Add ACP_TOOL to tool name mapping",
+  "toolNameSearch": "case bt.MCP:case bt.CALL_MCP_TOOL:return\"MCP\"",
+  "toolNameReplace": "case bt.ACP_TOOL:return\"ACP\";case bt.MCP:case bt.CALL_MCP_TOOL:return\"MCP\"",
+
+  "_comment_acp_templates": "Add ACP template elements before _6f",
+  "acpTemplatesSearch": "S6f=be(\"<span>Executing MCP tool\\u2026\");function _6f(",
+  "acpTemplatesReplace": "S6f=be(\"<span>Executing MCP tool\\u2026\"),_acpDiv=be(\"<div>\"),_acpSpan=be(\"<span>\"),_acpPre=be(\"<pre>\");function _acpTool(i){const[expanded,setExpanded]=Be(!1);const inputObj=ve(()=>{try{return JSON.parse(i.rawArgs||\"{}\")}catch{return{}}});const titleText=ve(()=>{const tn=i.toolName||\"ACP Tool\";const inp=inputObj();const preview=inp.command||inp.file_path||inp.pattern||inp.query||inp.path||\"\";const short=preview.length>40?preview.slice(0,40)+\"...\":preview;return short?tn+\" \"+short:tn});const inputDisplay=ve(()=>{try{return JSON.stringify(inputObj(),null,2)}catch{return i.rawArgs||\"\"}});const outputDisplay=ve(()=>i.result||\"\");return U(K2,{get children(){return[(()=>{var r=_acpDiv();r.style.cssText=\"display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px;color:var(--vscode-foreground)\";r.onclick=()=>setExpanded(!expanded());ee(r,(()=>{var h=_acpSpan();h.style.cssText=\"flex-shrink:0;width:16px;display:flex;align-items:center;justify-content:center\";h.className=\"codicon codicon-chevron-right\";Rt(()=>{h.style.transform=expanded()?\"rotate(90deg)\":\"rotate(0deg)\";h.style.transition=\"transform 0.15s\"});return h})());ee(r,(()=>{var h=_acpSpan();Rt(()=>{h.style.cssText=i.isLoading?\"color:var(--cursor-text-secondary);animation:_acpPulse 1.5s ease-in-out infinite\":\"color:var(--cursor-text-secondary)\"});ee(h,titleText);return h})());return r})(),U(Pe,{get when(){return expanded()},get children(){return(()=>{var c=_acpDiv();c.style.cssText=\"margin-top:8px;margin-left:20px;font-size:12px;display:flex;flex-direction:column;gap:8px\";ee(c,U(Pe,{get when(){return inputDisplay()&&inputDisplay()!=\"{}\"},get children(){return(()=>{var s=_acpDiv();ee(s,(()=>{var l=_acpSpan();l.style.cssText=\"color:var(--cursor-text-tertiary);font-size:11px;margin-bottom:4px;display:block\";l.textContent=\"Input\";return l})());ee(s,(()=>{var l=_acpPre();l.style.cssText=\"margin:0;padding:8px;background:var(--vscode-input-background);border-radius:4px;font-size:11px;max-height:150px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-family:var(--monaco-monospace-font)\";ee(l,inputDisplay);return l})());return s})()}}));ee(c,U(Pe,{get when(){return outputDisplay()},get children(){return(()=>{var s=_acpDiv();ee(s,(()=>{var l=_acpSpan();l.style.cssText=\"color:var(--cursor-text-tertiary);font-size:11px;margin-bottom:4px;display:block\";l.textContent=\"Output\";return l})());ee(s,(()=>{var l=_acpPre();l.style.cssText=\"margin:0;padding:8px;background:var(--vscode-input-background);border-radius:4px;font-size:11px;max-height:200px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-family:var(--monaco-monospace-font)\";ee(l,outputDisplay);return l})());return s})()}}));return c})()}})]}})};(function(){var s=document.createElement(\"style\");s.textContent=\"@keyframes _acpPulse{0%,100%{opacity:1}50%{opacity:0.5}}\";document.head.appendChild(s)})();function _6f(",
+
+  "_comment_acp_component": "Use custom _acpTool component for ACP tools",
+  "acpComponentSearch": "ut.result}})}}),U(cr,{get when(){return P(bt.CREATE_PLAN)}",
+  "acpComponentReplace": "ut.result}})}}),U(cr,{get when(){return P(90)},children:ze=>{const ut=ze();if(!ut)return null;return U(_acpTool,{get isInGroup(){return i.isInGroup},get isLoading(){return Ze().status===\"loading\"},get toolName(){return ut.name||\"ACP Tool\"},get rawArgs(){return ut.rawArgs},get result(){return ut.result}})}}),U(cr,{get when(){return P(bt.CREATE_PLAN)}"
 }
