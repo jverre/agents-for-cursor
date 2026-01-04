@@ -102,9 +102,6 @@ class CursorAutomation {
     await this.sleep(5000);
     await this.screenshot('02f-after-wait-5s.png');
 
-    // Check HTTP server is running
-    await this.waitForHttpServer();
-
     // Restart to apply patches
     await this.restart();
   }
