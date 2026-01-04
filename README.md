@@ -36,7 +36,7 @@ In addition, the following is currently work in progress:
 > This extension works by modifying core Cursor files and my corrupt the installation.
 
 To install the extension:
-1. [Click here to install](cursor:extension/jverre.agents-for-cursor) or search for "Agents for Cursor" in the extensions tab and click "Install".
+1. [Click here to install](vscode:extension/jverre.agents-for-cursor) or search for "Agents for Cursor" in the extensions tab and click "Install".
 2. Once installed, you will be prompted to "Enable" the extension and restart Cursor.
 3. Install Claude Code and run "/login" to run the auth process
 
