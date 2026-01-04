@@ -1,0 +1,61 @@
+{
+  "name": "agents-for-cursor",
+  "displayName": "Agents for Cursor (Claude Code)",
+  "description": "Integrate Claude Code into Cursor",
+  "version": "0.0.1",
+  "publisher": "local",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jverre/agents-for-cursor"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "*"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "acp.enable",
+        "title": "Agents for Cursor: Enable"
+      },
+      {
+        "command": "acp.disable",
+        "title": "Agents for Cursor: Disable"
+      },
+      {
+        "command": "acp.reload",
+        "title": "Agents for Cursor: Reload"
+      }
+    ]
+  },
+  "scripts": {
+    "test": "jest",
+    "test:unit": "jest tests/unit",
+    "test:integration": "jest tests/integration",
+    "test:e2e": "jest tests/e2e",
+    "test:watch": "jest --watch",
+    "test:ci": "jest --coverage --ci",
+    "download-cursor": "node tests/helpers/cursor-installer.js download",
+    "package": "npx vsce package --no-dependencies --allow-star-activation",
+    "launch": "node scripts/launch-cursor.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "@vscode/test-electron": "^2.3.8",
+    "@vscode/vsce": "^2.22.0",
+    "better-sqlite3": "^12.5.0",
+    "download": "^8.0.0",
+    "extract-zip": "^2.0.1",
+    "jest": "^29.7.0",
+    "node-fetch": "^2.7.0",
+    "tar": "^6.2.0",
+    "tree-kill": "^1.2.2",
+    "wait-on": "^7.2.0"
+  }
+}
