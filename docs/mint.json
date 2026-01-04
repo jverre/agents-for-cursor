@@ -1,0 +1,45 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Agents for Cursor",
+  "colors": {
+    "primary": "#ff0000",
+    "light": "#ff6666",
+    "dark": "#cc0000"
+  },
+  "navigation": [
+    {
+      "group": "Getting Started",
+      "pages": [
+        "getting-started"  
+      ]
+    },
+    {
+      "group": "Architecture",
+      "pages": [
+        "cursor-chat-data-flow",
+        "cursor-chat-rendering-system",
+        "cursor-tool-bubble-format",
+        "agent-client-protocol"
+      ]
+    }
+  ],
+  "logo": {
+    "dark": "/logo/dark.svg",
+    "light": "/logo/light.svg"
+  },
+  "favicon": "/favicon.png",
+  "topbarLinks": [
+    {
+      "name": "GitHub",
+      "url": "https://github.com/yourusername/opencursor"
+    }
+  ],
+  "anchors": [
+    {
+      "name": "Documentation",
+      "icon": "book-open-cover",
+      "url": "https://docs.example.com"
+    }
+  ]
+}
