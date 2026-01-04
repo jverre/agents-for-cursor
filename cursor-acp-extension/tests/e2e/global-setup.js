@@ -35,19 +35,9 @@ module.exports = async () => {
     console.log('[Global Setup] Enabling ACP...');
     await cursor.enableACP();
 
-    // Verify HTTP server is running
-    console.log('[Global Setup] Verifying ACP bridge is running...');
-    const running = await cursor.waitForHttpServer();
-    if (!running) {
-      throw new Error('ACP bridge failed to start');
-    }
-
-    console.log('[Global Setup] ACP enabled successfully');
-
     // Close Cursor (keep patched user-data directory)
     console.log('[Global Setup] Closing Cursor...');
     await cursor.close();
-    await cursor.sleep(2000);
 
     console.log('[Global Setup] Environment setup complete!');
     console.log(`[Global Setup] Patched user-data directory: ${userDataDir}`);

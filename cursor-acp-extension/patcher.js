@@ -2,8 +2,16 @@ const fs = require('fs').promises;
 const path = require('path');
 const vscode = require('vscode');
 
-// Token used to identify ACP patches - update version when patch format changes
-const ACP_TOKEN = '/* ACP_PATCH_V1 */';
+// Get extension version from package.json
+function getExtensionVersion() {
+    const packageJson = require('./package.json');
+    return packageJson.version;
+}
+
+// Token used to identify ACP patches - based on extension version
+function getAcpToken() {
+    return `/* ACP_PATCH_${getExtensionVersion()} */`;
+}
 
 // Get the Cursor app root path
 function getCursorAppRoot() {
@@ -31,12 +39,13 @@ function getMainBackupPath() {
     return getMainWorkbenchPath() + '.acp-backup';
 }
 
-// Check if patches are valid (token exists in both patched files)
+// Check if patches are valid (token with current version exists in both patched files)
 async function isPatchValid() {
     try {
+        const token = getAcpToken();
         const content = await fs.readFile(getWorkbenchPath(), 'utf8');
         const mainContent = await fs.readFile(getMainWorkbenchPath(), 'utf8');
-        return content.includes(ACP_TOKEN) && mainContent.includes(ACP_TOKEN);
+        return content.includes(token) && mainContent.includes(token);
     } catch {
         return false;
     }
@@ -64,7 +73,7 @@ async function applyPatches() {
     const slashCommandPatch = await readPatchFile(path.join(patchesDir, 'slash-command-patch.js'));
 
     // Prepend patches to bootstrap workbench
-    const patchedContent = ACP_TOKEN + '\n' +
+    const patchedContent = getAcpToken() + '\n' +
         '// ACP Integration - DO NOT EDIT MANUALLY\n' +
         '(function() {\n' +
         '  "use strict";\n' +
@@ -88,8 +97,8 @@ async function patchMainWorkbench() {
 
     let mainContent = await fs.readFile(mainWorkbenchPath, 'utf8');
 
-    // Check if already patched
-    if (mainContent.includes(ACP_TOKEN)) {
+    // Check if already patched with current version
+    if (mainContent.includes(getAcpToken())) {
         return;
     }
 
@@ -114,6 +123,7 @@ async function patchMainWorkbench() {
         // Read chat interception template and substitute variables
         const chatInterceptionTemplate = await readPatchFile(path.join(__dirname, 'patches', 'chat-interception.js'));
         const acpInterceptionCode = chatInterceptionTemplate
+            .replace(/\{\{ACP_TOKEN\}\}/g, getAcpToken())
             .replace(/\{\{e\}\}/g, e)
             .replace(/\{\{t\}\}/g, t)
             .replace(/\{\{n\}\}/g, n)
