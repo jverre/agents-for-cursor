@@ -2,6 +2,17 @@ const fs = require('fs').promises;
 const path = require('path');
 const vscode = require('vscode');
 
+// Get extension version from package.json
+function getExtensionVersion() {
+    const packageJson = require('./package.json');
+    return packageJson.version;
+}
+
+// Token used to identify ACP patches - based on extension version
+function getAcpToken() {
+    return `/* ACP_PATCH_${getExtensionVersion()} */`;
+}
+
 // Get the Cursor app root path
 function getCursorAppRoot() {
     // vscode.env.appRoot points to the app's Resources/app directory
@@ -20,7 +31,7 @@ function getMainWorkbenchPath() {
 
 // Get path to backup file
 function getBackupPath() {
-    return getWorkbenchPath() + '.backup';
+    return getWorkbenchPath() + '.acp-backup';
 }
 
 // Get path to main workbench backup file
@@ -28,13 +39,13 @@ function getMainBackupPath() {
     return getMainWorkbenchPath() + '.acp-backup';
 }
 
-// Check if patches are already applied
-async function isPatchApplied() {
+// Check if patches are valid (token with current version exists in both patched files)
+async function isPatchValid() {
     try {
+        const token = getAcpToken();
         const content = await fs.readFile(getWorkbenchPath(), 'utf8');
         const mainContent = await fs.readFile(getMainWorkbenchPath(), 'utf8');
-        return content.includes('// ACP Integration') &&
-               mainContent.includes('/* ACP CHAT INTERCEPTION */');
+        return content.includes(token) && mainContent.includes(token);
     } catch {
         return false;
     }
@@ -62,7 +73,8 @@ async function applyPatches() {
     const slashCommandPatch = await readPatchFile(path.join(patchesDir, 'slash-command-patch.js'));
 
     // Prepend patches to bootstrap workbench
-    const patchedContent = '// ACP Integration - DO NOT EDIT MANUALLY\n' +
+    const patchedContent = getAcpToken() + '\n' +
+        '// ACP Integration - DO NOT EDIT MANUALLY\n' +
         '(function() {\n' +
         '  "use strict";\n' +
         '\n' +
@@ -85,8 +97,8 @@ async function patchMainWorkbench() {
 
     let mainContent = await fs.readFile(mainWorkbenchPath, 'utf8');
 
-    // Check if already patched
-    if (mainContent.includes('/* ACP CHAT INTERCEPTION */')) {
+    // Check if already patched with current version
+    if (mainContent.includes(getAcpToken())) {
         return;
     }
 
@@ -111,6 +123,7 @@ async function patchMainWorkbench() {
         // Read chat interception template and substitute variables
         const chatInterceptionTemplate = await readPatchFile(path.join(__dirname, 'patches', 'chat-interception.js'));
         const acpInterceptionCode = chatInterceptionTemplate
+            .replace(/\{\{ACP_TOKEN\}\}/g, getAcpToken())
             .replace(/\{\{e\}\}/g, e)
             .replace(/\{\{t\}\}/g, t)
             .replace(/\{\{n\}\}/g, n)
@@ -175,6 +188,50 @@ async function patchMainWorkbench() {
         console.log('[ACP Patcher] Patched dropdown to filter ACP commands by model');
     }
 
+    // Patch tool review service to handle ACP tool type (90)
+    // This makes type 90 bubbles skip the review model (no approval UI needed)
+    if (mainContent.includes(patterns.acpToolReviewSearch)) {
+        mainContent = mainContent.replace(patterns.acpToolReviewSearch, patterns.acpToolReviewReplace);
+        console.log('[ACP Patcher] Patched tool review service for ACP type 90');
+    }
+
+    // Patch tool bubble rendering to treat ACP type 90 like MCP tools
+    // This makes ACP tool bubbles render with the MCP-style component
+    if (mainContent.includes(patterns.acpToolBubbleRenderSearch)) {
+        mainContent = mainContent.replaceAll(patterns.acpToolBubbleRenderSearch, patterns.acpToolBubbleRenderReplace);
+        console.log('[ACP Patcher] Patched tool bubble rendering for ACP type 90');
+    }
+
+    // Register ACP_TOOL (90) in the bt enum (tool types)
+    if (mainContent.includes(patterns.btEnumSearch)) {
+        mainContent = mainContent.replace(patterns.btEnumSearch, patterns.btEnumReplace);
+        console.log('[ACP Patcher] Registered ACP_TOOL (90) in bt enum');
+    }
+
+    // Add verb labels for ACP_TOOL in pN function (loading/completed text)
+    if (mainContent.includes(patterns.verbLabelsSearch)) {
+        mainContent = mainContent.replace(patterns.verbLabelsSearch, patterns.verbLabelsReplace);
+        console.log('[ACP Patcher] Added verb labels for ACP_TOOL');
+    }
+
+    // Add ACP_TOOL to tool name mapping (returns "ACP" for display)
+    if (mainContent.includes(patterns.toolNameSearch)) {
+        mainContent = mainContent.replace(patterns.toolNameSearch, patterns.toolNameReplace);
+        console.log('[ACP Patcher] Added ACP_TOOL to tool name mapping');
+    }
+
+    // Add ACP templates and _acpTool function (before _6f)
+    if (mainContent.includes(patterns.acpTemplatesSearch)) {
+        mainContent = mainContent.replace(patterns.acpTemplatesSearch, patterns.acpTemplatesReplace);
+        console.log('[ACP Patcher] Added ACP templates and _acpTool function');
+    }
+
+    // Insert custom ACP tool component into Smo (after CALL_MCP_TOOL, before CREATE_PLAN)
+    if (mainContent.includes(patterns.acpComponentSearch)) {
+        mainContent = mainContent.replace(patterns.acpComponentSearch, patterns.acpComponentReplace);
+        console.log('[ACP Patcher] Inserted custom ACP tool component into Smo');
+    }
+
     await fs.writeFile(mainWorkbenchPath, mainContent, 'utf8');
 }
 
@@ -230,7 +287,7 @@ async function loadPatchPatterns() {
 module.exports = {
     applyPatches,
     removePatches,
-    isPatchApplied,
+    isPatchValid,
     getWorkbenchPath,
     getBackupPath
 };
