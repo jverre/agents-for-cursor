@@ -710,6 +710,7 @@ async function activate(context) {
 
     let reloadCommand = vscode.commands.registerCommand('acp.reload', async () => {
         try {
+            agentManager.cleanup();
             await patcher.removePatches();
             await patcher.applyPatches();
             context.globalState.update('active', true);
