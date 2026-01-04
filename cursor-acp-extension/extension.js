@@ -741,6 +741,7 @@ async function activate(context) {
         try {
             await patcher.applyPatches();
             context.globalState.update('active', true);
+            context.globalState.update('firstRun', false);
             vscode.window.showInformationMessage(
                 'Agents for Cursor enabled! Please restart Cursor.',
                 'Restart Now'
