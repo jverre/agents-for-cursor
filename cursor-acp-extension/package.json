@@ -1,12 +1,12 @@
 {
-  "name": "cursor-acp-extension",
-  "displayName": "Cursor ACP Integration",
-  "description": "Integrate Agent Client Protocol (ACP) providers into Cursor",
-  "version": "0.1.0",
+  "name": "agents-for-cursor",
+  "displayName": "Agents for Cursor (Claude Code)",
+  "description": "Integrate Claude Code into Cursor",
+  "version": "0.0.1",
   "publisher": "local",
   "repository": {
     "type": "git",
-    "url": "https://github.com/jverre/opencursor"
+    "url": "https://github.com/jverre/agents-for-cursor"
   },
   "engines": {
     "vscode": "^1.85.0"
@@ -22,15 +22,15 @@
     "commands": [
       {
         "command": "acp.enable",
-        "title": "ACP: Enable"
+        "title": "Agents for Cursor: Enable"
       },
       {
         "command": "acp.disable",
-        "title": "ACP: Disable"
+        "title": "Agents for Cursor: Disable"
       },
       {
         "command": "acp.reload",
-        "title": "ACP: Reload"
+        "title": "Agents for Cursor: Reload"
       }
     ]
   },

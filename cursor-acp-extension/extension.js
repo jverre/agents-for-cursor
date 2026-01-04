@@ -420,19 +420,28 @@ class ACPAgentManager {
 async function activate(context) {
     const agentManager = new ACPAgentManager();
 
-    // First-run detection and auto-patching
+    // State management:
+    // - firstRun: undefined on first install, false after user responds to consent dialog
+    // - active: true if user enabled patches, false if user disabled them
     const firstRun = context.globalState.get('firstRun');
-    const patchesApplied = await patcher.isPatchApplied();
+    const active = context.globalState.get('active');
 
     if (firstRun === undefined) {
-        // First install - automatically enable patches
+        // First install - show consent dialog
+        const result = await vscode.window.showInformationMessage(
+            'Agents for Cursor will modify Cursor files to enable agent integration. ' +
+            'You can disable this anytime via the command palette or reinstall Cursor.',
+            'Proceed', 'Cancel'
+        );
+
         context.globalState.update('firstRun', false);
 
-        if (!patchesApplied) {
+        if (result === 'Proceed') {
             try {
                 await patcher.applyPatches();
+                context.globalState.update('active', true);
                 vscode.window.showInformationMessage(
-                    'ACP integration enabled! Please restart Cursor to activate.',
+                    'Agents for Cursor enabled! Please restart Cursor to activate.',
                     'Restart Now'
                 ).then(selection => {
                     if (selection === 'Restart Now') {
@@ -440,20 +449,41 @@ async function activate(context) {
                     }
                 });
             } catch (error) {
-                vscode.window.showErrorMessage(`Failed to enable ACP: ${error.message}`);
+                vscode.window.showErrorMessage(`Failed to enable Agents for Cursor: ${error.message}`);
             }
         }
-    } else if (!patchesApplied) {
-        // Not first run, but patches are missing (Cursor update?)
-        vscode.window.showInformationMessage(
-            'ACP patches need to be reapplied (Cursor may have been updated). Run "ACP: Enable" to activate.',
-            'Enable Now'
-        ).then(selection => {
-            if (selection === 'Enable Now') {
-                vscode.commands.executeCommand('acp.enable');
+        // If 'Cancel', we don't set active - user can enable later via command
+    } else if (active) {
+        // User previously enabled patches - verify they're still valid
+        const patchesValid = await patcher.isPatchValid();
+
+        if (!patchesValid) {
+            // Patches were overwritten (Cursor update?) - offer to re-apply
+            const result = await vscode.window.showInformationMessage(
+                'Agents for Cursor patches were overwritten (Cursor may have updated).',
+                'Re-apply', 'Disable'
+            );
+
+            if (result === 'Re-apply') {
+                try {
+                    await patcher.applyPatches();
+                    vscode.window.showInformationMessage(
+                        'Agents for Cursor re-applied! Please restart Cursor.',
+                        'Restart Now'
+                    ).then(selection => {
+                        if (selection === 'Restart Now') {
+                            vscode.commands.executeCommand('workbench.action.reloadWindow');
+                        }
+                    });
+                } catch (error) {
+                    vscode.window.showErrorMessage(`Failed to re-apply Agents for Cursor: ${error.message}`);
+                }
+            } else if (result === 'Disable') {
+                context.globalState.update('active', false);
             }
-        });
+        }
     }
+    // If active === false, user explicitly disabled - don't prompt
 
     // Create HTTP server for renderer-to-extension communication
     const server = http.createServer(async (req, res) => {
@@ -710,8 +740,9 @@ async function activate(context) {
     let enableCommand = vscode.commands.registerCommand('acp.enable', async () => {
         try {
             await patcher.applyPatches();
+            context.globalState.update('active', true);
             vscode.window.showInformationMessage(
-                'ACP integration enabled! Please restart Cursor.',
+                'Agents for Cursor enabled! Please restart Cursor.',
                 'Restart Now'
             ).then(selection => {
                 if (selection === 'Restart Now') {
@@ -719,15 +750,17 @@ async function activate(context) {
                 }
             });
         } catch (error) {
-            vscode.window.showErrorMessage(`Failed to enable ACP: ${error.message}`);
+            vscode.window.showErrorMessage(`Failed to enable Agents for Cursor: ${error.message}`);
         }
     });
 
     let disableCommand = vscode.commands.registerCommand('acp.disable', async () => {
         try {
             await patcher.removePatches();
+            context.globalState.update('active', undefined);
+            context.globalState.update('firstRun', undefined);
             vscode.window.showInformationMessage(
-                'ACP integration disabled! Please restart Cursor.',
+                'Agents for Cursor disabled! Please restart Cursor.',
                 'Restart Now'
             ).then(selection => {
                 if (selection === 'Restart Now') {
@@ -735,7 +768,7 @@ async function activate(context) {
                 }
             });
         } catch (error) {
-            vscode.window.showErrorMessage(`Failed to disable ACP: ${error.message}`);
+            vscode.window.showErrorMessage(`Failed to disable Agents for Cursor: ${error.message}`);
         }
     });
 
@@ -743,8 +776,9 @@ async function activate(context) {
         try {
             await patcher.removePatches();
             await patcher.applyPatches();
+            context.globalState.update('active', true);
             vscode.window.showInformationMessage(
-                'ACP integration reloaded! Please restart Cursor.',
+                'Agents for Cursor reloaded! Please restart Cursor.',
                 'Restart Now'
             ).then(selection => {
                 if (selection === 'Restart Now') {
@@ -752,7 +786,7 @@ async function activate(context) {
                 }
             });
         } catch (error) {
-            vscode.window.showErrorMessage(`Failed to reload ACP: ${error.message}`);
+            vscode.window.showErrorMessage(`Failed to reload Agents for Cursor: ${error.message}`);
         }
     });
 

@@ -6,6 +6,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
       let {{r}} = {{ssFunc}}();
       {{s}}.setAttribute("requestId", {{r}});
 
+      /* ACP_PATCH_V1 */
       /* === ACP CHAT INTERCEPTION === */
       const composerHandle = this._composerDataService.getWeakHandleOptimistic({{e}});
       const modelName = {{n}}?.modelOverride || composerHandle?.data?.modelConfig?.modelName || '';
