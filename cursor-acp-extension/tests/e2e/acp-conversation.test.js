@@ -12,7 +12,7 @@ describe('E2E: Claude Code (ACP) Conversation History', () => {
 
     // Launch Cursor with pre-patched user-data directory
     await cursor.launch();
-    await cursor.screenshot('acp-conv-01-launched.png');
+    await cursor.screenshot('4-acp-conversation-1-launched.png');
 
     // Wait for app to initialize
     await cursor.sleep(3000);
@@ -26,10 +26,10 @@ describe('E2E: Claude Code (ACP) Conversation History', () => {
   test('Claude Code (ACP) maintains conversation history', async () => {
     // Start a new chat
     await cursor.openChat();
-    await cursor.screenshot('acp-conv-02-chat-opened.png');
+    await cursor.screenshot('4-acp-conversation-2-chat-opened.png');
 
-    await cursor.selectModel('Claude Code (ACP)', 'acp-conv-03');
-    await cursor.screenshot('acp-conv-04-acp-selected.png');
+    await cursor.selectModel('Claude Code (ACP)', '4-acp-conversation-3');
+    await cursor.screenshot('4-acp-conversation-4-model-selected.png');
 
     // Wait for extension HTTP server to be ready
     await cursor.sleep(5000);
@@ -37,10 +37,10 @@ describe('E2E: Claude Code (ACP) Conversation History', () => {
     // First message: establish context
     console.log('[Test] Sending first message to establish context...');
     await cursor.sendChatMessage('I am Alice');
-    await cursor.screenshot('acp-conv-05-first-message-sent.png');
+    await cursor.screenshot('4-acp-conversation-5-first-message-sent.png');
 
     const response1 = await cursor.waitForChatResponse(60000);
-    await cursor.screenshot('acp-conv-06-first-response-received.png');
+    await cursor.screenshot('4-acp-conversation-6-first-response-received.png');
 
     expect(response1.length).toBeGreaterThan(0);
     console.log('[Test] First response:', response1.substring(0, 100));
@@ -48,10 +48,10 @@ describe('E2E: Claude Code (ACP) Conversation History', () => {
     // Second message: test if context is remembered
     console.log('[Test] Sending second message to test context...');
     await cursor.sendChatMessage('Who am I?');
-    await cursor.screenshot('acp-conv-07-second-message-sent.png');
+    await cursor.screenshot('4-acp-conversation-7-second-message-sent.png');
 
     const response2 = await cursor.waitForChatResponse(60000);
-    await cursor.screenshot('acp-conv-08-second-response-received.png');
+    await cursor.screenshot('4-acp-conversation-8-second-response-received.png');
 
     console.log('[Test] Second response:', response2.substring(0, 100));
 

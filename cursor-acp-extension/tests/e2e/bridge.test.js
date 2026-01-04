@@ -12,7 +12,7 @@ describe('E2E: ACP Bridge', () => {
 
     // Launch Cursor with pre-patched user-data directory
     await cursor.launch();
-    await cursor.screenshot('bridge-01-launched.png');
+    await cursor.screenshot('1-bridge-1-launched.png');
 
     // Wait for app to initialize
     await cursor.sleep(3000);

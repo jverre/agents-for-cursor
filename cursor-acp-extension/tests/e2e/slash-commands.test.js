@@ -12,7 +12,7 @@ describe('E2E: ACP Slash Commands', () => {
 
     // Launch Cursor with pre-patched user-data directory
     await cursor.launch();
-    await cursor.screenshot('slash-01-launched.png');
+    await cursor.screenshot('5-slash-commands-1-launched.png');
 
     // Wait for app to initialize
     await cursor.sleep(3000);
@@ -26,26 +26,26 @@ describe('E2E: ACP Slash Commands', () => {
   test('ACP slash commands appear when typing "/" with Claude Code model', async () => {
     // Start a new chat
     await cursor.openChat();
-    await cursor.screenshot('slash-02-chat-opened.png');
+    await cursor.screenshot('5-slash-commands-2-chat-opened.png');
 
     // Select Claude Code (ACP) model
-    await cursor.selectModel('Claude Code (ACP)', 'slash-03');
-    await cursor.screenshot('slash-04-acp-model-selected.png');
+    await cursor.selectModel('Claude Code (ACP)', '5-slash-commands-3');
+    await cursor.screenshot('5-slash-commands-4-model-selected.png');
 
     // Wait for extension HTTP server to be ready
     await cursor.sleep(5000);
 
     // Type "/" to trigger slash command dropdown (don't press Enter)
     await cursor.typeInChat('/');
-    await cursor.screenshot('slash-05-slash-typed.png');
+    await cursor.screenshot('5-slash-commands-5-slash-typed.png');
 
     // Wait for dropdown to appear and lazy-load commands
     await cursor.sleep(3000);
-    await cursor.screenshot('slash-06-after-wait.png');
+    await cursor.screenshot('5-slash-commands-6-after-wait.png');
 
     // Check if pr-comments command appears in the dropdown
     const hasPrComments = await cursor.hasTextInDropdown('pr-comments', 10000);
-    await cursor.screenshot('slash-07-final.png');
+    await cursor.screenshot('5-slash-commands-7-final.png');
 
     expect(hasPrComments).toBe(true);
   }, 90000);
