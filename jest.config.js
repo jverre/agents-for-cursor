@@ -4,9 +4,9 @@ module.exports = {
     '**/tests/**/*.test.js'
   ],
   collectCoverageFrom: [
-    'extension.js',
-    'patcher.js',
-    'patches/**/*.js'
+    'src/extension.js',
+    'src/patcher.js',
+    'src/patches/**/*.js'
   ],
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],

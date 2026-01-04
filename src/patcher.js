@@ -4,7 +4,7 @@ const vscode = require('vscode');
 
 // Get extension version from package.json
 function getExtensionVersion() {
-    const packageJson = require('./package.json');
+    const packageJson = require('../package.json');
     return packageJson.version;
 }
 
