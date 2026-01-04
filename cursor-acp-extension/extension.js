@@ -420,72 +420,7 @@ class ACPAgentManager {
 async function activate(context) {
     const agentManager = new ACPAgentManager();
 
-    // State management:
-    // - firstRun: undefined on first install, false after user responds to consent dialog
-    // - active: true if user enabled patches, false if user disabled them
-    const firstRun = context.globalState.get('firstRun');
-    const active = context.globalState.get('active');
-
-    if (firstRun === undefined) {
-        // First install - show consent dialog
-        const result = await vscode.window.showInformationMessage(
-            'Agents for Cursor will modify Cursor files to enable agent integration. ' +
-            'You can disable this anytime via the command palette or reinstall Cursor.',
-            'Proceed', 'Cancel'
-        );
-
-        context.globalState.update('firstRun', false);
-
-        if (result === 'Proceed') {
-            try {
-                await patcher.applyPatches();
-                context.globalState.update('active', true);
-                vscode.window.showInformationMessage(
-                    'Agents for Cursor enabled! Please restart Cursor to activate.',
-                    'Restart Now'
-                ).then(selection => {
-                    if (selection === 'Restart Now') {
-                        vscode.commands.executeCommand('workbench.action.reloadWindow');
-                    }
-                });
-            } catch (error) {
-                vscode.window.showErrorMessage(`Failed to enable Agents for Cursor: ${error.message}`);
-            }
-        }
-        // If 'Cancel', we don't set active - user can enable later via command
-    } else if (active) {
-        // User previously enabled patches - verify they're still valid
-        const patchesValid = await patcher.isPatchValid();
-
-        if (!patchesValid) {
-            // Patches were overwritten (Cursor update?) - offer to re-apply
-            const result = await vscode.window.showInformationMessage(
-                'Agents for Cursor patches were overwritten (Cursor may have updated).',
-                'Re-apply', 'Disable'
-            );
-
-            if (result === 'Re-apply') {
-                try {
-                    await patcher.applyPatches();
-                    vscode.window.showInformationMessage(
-                        'Agents for Cursor re-applied! Please restart Cursor.',
-                        'Restart Now'
-                    ).then(selection => {
-                        if (selection === 'Restart Now') {
-                            vscode.commands.executeCommand('workbench.action.reloadWindow');
-                        }
-                    });
-                } catch (error) {
-                    vscode.window.showErrorMessage(`Failed to re-apply Agents for Cursor: ${error.message}`);
-                }
-            } else if (result === 'Disable') {
-                context.globalState.update('active', false);
-            }
-        }
-    }
-    // If active === false, user explicitly disabled - don't prompt
-
-    // Create HTTP server for renderer-to-extension communication
+    // Create HTTP server FIRST (before any dialogs that might block)
     const server = http.createServer(async (req, res) => {
         // Enable CORS
         res.setHeader('Access-Control-Allow-Origin', '*');
@@ -741,6 +676,7 @@ async function activate(context) {
         try {
             await patcher.applyPatches();
             context.globalState.update('active', true);
+            context.globalState.update('firstRun', false);
             vscode.window.showInformationMessage(
                 'Agents for Cursor enabled! Please restart Cursor.',
                 'Restart Now'
@@ -827,6 +763,67 @@ async function activate(context) {
         sendMessageCommand,
         { dispose: () => agentManager.cleanup() }
     );
+
+    // Handle first-run consent dialog and re-apply detection
+    // This runs AFTER server and commands are registered so they're always available
+    const firstRun = context.globalState.get('firstRun');
+    const active = context.globalState.get('active');
+
+    if (firstRun === undefined) {
+        // First install - show consent dialog (non-blocking for commands/server)
+        vscode.window.showInformationMessage(
+            'Agents for Cursor will modify Cursor files to enable agent integration. ' +
+            'You can disable this anytime via the command palette or reinstall Cursor.',
+            'Proceed', 'Cancel'
+        ).then(async (result) => {
+            context.globalState.update('firstRun', false);
+
+            if (result === 'Proceed') {
+                try {
+                    await patcher.applyPatches();
+                    context.globalState.update('active', true);
+                    vscode.window.showInformationMessage(
+                        'Agents for Cursor enabled! Please restart Cursor to activate.',
+                        'Restart Now'
+                    ).then(selection => {
+                        if (selection === 'Restart Now') {
+                            vscode.commands.executeCommand('workbench.action.reloadWindow');
+                        }
+                    });
+                } catch (error) {
+                    vscode.window.showErrorMessage(`Failed to enable Agents for Cursor: ${error.message}`);
+                }
+            }
+        });
+    } else if (active) {
+        // User previously enabled patches - verify they're still valid
+        patcher.isPatchValid().then(async (patchesValid) => {
+            if (!patchesValid) {
+                const result = await vscode.window.showInformationMessage(
+                    'Agents for Cursor patches were overwritten (Cursor may have updated).',
+                    'Re-apply', 'Disable'
+                );
+
+                if (result === 'Re-apply') {
+                    try {
+                        await patcher.applyPatches();
+                        vscode.window.showInformationMessage(
+                            'Agents for Cursor re-applied! Please restart Cursor.',
+                            'Restart Now'
+                        ).then(selection => {
+                            if (selection === 'Restart Now') {
+                                vscode.commands.executeCommand('workbench.action.reloadWindow');
+                            }
+                        });
+                    } catch (error) {
+                        vscode.window.showErrorMessage(`Failed to re-apply Agents for Cursor: ${error.message}`);
+                    }
+                } else if (result === 'Disable') {
+                    context.globalState.update('active', false);
+                }
+            }
+        });
+    }
 }
 
 function deactivate() {}

@@ -94,16 +94,13 @@ class CursorAutomation {
 
   async enableACP() {
     await this.screenshot('02a-before-acp-enable.png');
-    await this.executeCommand('ACP: Enable', '02');
+    await this.executeCommand('Agents for Cursor: Enable', '02');
     await this.screenshot('02e-after-acp-enable-command.png');
 
     // Wait for patches to be applied (need more time for the command to complete)
     console.log('[Test] Waiting 5 seconds for patches to be applied...');
     await this.sleep(5000);
     await this.screenshot('02f-after-wait-5s.png');
-
-    // Check HTTP server is running
-    await this.waitForHttpServer();
 
     // Restart to apply patches
     await this.restart();
