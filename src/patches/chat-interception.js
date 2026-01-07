@@ -133,6 +133,10 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
 
                 const TOOL_FORMER_CAPABILITY = 15;
                 const ACP_TOOL_TYPE = 90;
+                const READ_FILE_V2_TYPE = 40;
+
+                // Detect if this is a Read tool
+                const isReadTool = tc.kind === 'read';
 
                 // Get tool input - may be empty on first event, populated on subsequent
                 const toolInput = tc.input || tc.rawInput || {};
@@ -140,13 +144,72 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                 const hasInput = Object.keys(inputObj).length > 0;
 
                 // On first tool_call for this ID, create a tool bubble
+                // For Read tools: wait for file_path before creating (skip empty first event)
                 if (isNew && !s.toolBubbles.has(toolCallId)) {
+                  // For Read tools without file_path, skip creation - wait for second event
+                  if (isReadTool && !inputObj.file_path) {
+                    alert('[ACP-READ] Skipping empty first event, waiting for file path');
+                    return;
+                  }
+
                   s.bubbleId = null;
                   s.text = '';
 
                   // Create a single formatted text bubble for the tool call
                   const toolBubbleId = gen();
                   s.toolBubbles.set(toolCallId, toolBubbleId);
+
+                  // Track tool type for completion handling
+                  if (!s.toolTypes) s.toolTypes = new Map();
+                  s.toolTypes.set(toolCallId, { isRead: isReadTool });
+
+                  // Transform tool data based on kind
+                  let toolData;
+                  if (isReadTool) {
+                    // Map to Cursor's READ_FILE_V2 format (type 40)
+                    // Note: ACP sends 2 tool_call events - first with empty rawInput, second with file_path
+                    const filePath = inputObj.file_path || '';
+
+                    alert('[ACP-READ] Creating bubble\nFile path: ' + (filePath || '(empty)') + '\ninputObj: ' + JSON.stringify(inputObj));
+
+                    // Always create type 40 for Read tools, even if file path is empty initially
+                    // It will be updated when the second tool_call event arrives with the file path
+                    const cursorRawArgs = filePath ? {
+                      target_file: filePath,
+                      limit: inputObj.limit,
+                      offset: inputObj.offset
+                    } : {};
+
+                    // Proper URI format: file:// + /path = file:///path (three slashes total)
+                    const effectiveUri = filePath ? ('file://' + filePath) : '';
+
+                    toolData = {
+                      tool: READ_FILE_V2_TYPE,
+                      toolCallId: toolCallId,
+                      status: 'loading',
+                      name: 'read_file',
+                      params: {
+                        targetFile: filePath || '',
+                        effectiveUri: effectiveUri,
+                        limit: inputObj.limit || 1000,
+                        charsLimit: 100000
+                      },
+                      rawArgs: cursorRawArgs,
+                      result: null
+                    };
+
+                    alert('[ACP-READ] Created bubble (type 40)\ntargetFile: ' + (filePath || '(empty)') + '\neffectiveUri: ' + (effectiveUri || '(empty)'));
+                  } else {
+                    // Default ACP tool rendering (type 90)
+                    toolData = {
+                      tool: ACP_TOOL_TYPE,
+                      toolCallId: toolCallId,
+                      status: 'loading',
+                      name: toolName,
+                      rawArgs: JSON.stringify(inputObj),
+                      result: null
+                    };
+                  }
 
                   // ACP Tool Bubble - simplified structure
                   // toolFormerData fields: tool, status, name, rawArgs (input JSON), result (output JSON)
@@ -158,14 +221,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                     codeBlocks: [],
                     createdAt: new Date().toISOString(),
                     capabilityType: TOOL_FORMER_CAPABILITY,
-                    toolFormerData: {
-                      tool: ACP_TOOL_TYPE,
-                      toolCallId: toolCallId,
-                      status: 'loading',
-                      name: toolName,
-                      rawArgs: JSON.stringify(inputObj),
-                      result: null
-                    }
+                    toolFormerData: toolData
                   };
 
                   try {
@@ -179,12 +235,37 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                   }
                 }
 
-                // Update rawArgs when we receive input data
+                // Update rawArgs when we receive input data (second tool_call event)
                 if (isNew && s.toolBubbles.has(toolCallId) && hasInput) {
                   const toolBubbleId = s.toolBubbles.get(toolCallId);
-                  svc.updateComposerDataSetStore({{e}}, u => {
-                    u("conversationMap", toolBubbleId, "toolFormerData", "rawArgs", JSON.stringify(inputObj));
-                  });
+
+                  // For Read tools, we need to update params too (not just rawArgs)
+                  if (isReadTool && inputObj.file_path) {
+                    const filePath = inputObj.file_path;
+                    const cursorRawArgs = {
+                      target_file: filePath,
+                      limit: inputObj.limit,
+                      offset: inputObj.offset
+                    };
+                    // Proper URI format: file:// + /path = file:///path (three slashes total)
+                    const effectiveUri = 'file://' + filePath;
+
+                    alert('[ACP-READ] Updating with file path\nFile: ' + filePath + '\neffectiveUri: ' + effectiveUri);
+
+                    svc.updateComposerDataSetStore({{e}}, u => {
+                      u("conversationMap", toolBubbleId, "toolFormerData", "rawArgs", cursorRawArgs);
+                      u("conversationMap", toolBubbleId, "toolFormerData", "params", {
+                        targetFile: filePath,
+                        effectiveUri: effectiveUri,
+                        limit: inputObj.limit || 1000,
+                        charsLimit: 100000
+                      });
+                    });
+                  } else {
+                    svc.updateComposerDataSetStore({{e}}, u => {
+                      u("conversationMap", toolBubbleId, "toolFormerData", "rawArgs", JSON.stringify(inputObj));
+                    });
+                  }
                 }
 
                 // Check for tool_result event as completion indicator
@@ -196,21 +277,54 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                   if (toolBubbleId) {
                     const finalStatus = isFailed ? 'error' : 'completed';
 
+                    alert('[ACP-READ] Completion event\nstatus: ' + finalStatus + '\nhas content: ' + !!tc.content + '\nhas result: ' + !!tc.result);
+
                     // Extract output from ACP response
                     let output = '';
                     if (Array.isArray(tc.result)) {
                       output = tc.result.map(r => r.text || '').join('');
                     } else if (typeof tc.result === 'string') {
                       output = tc.result;
+                    } else if (tc.content && Array.isArray(tc.content)) {
+                      // Extract from ACP content array format: content[0].content.text
+                      const textContent = tc.content.find(c => c.type === 'content');
+                      if (textContent?.content?.text) {
+                        output = textContent.content.text;
+                        // ACP wraps file content in markdown code blocks (```), unwrap them
+                        const match = output.match(/^```+\n([\s\S]*?)\n```+$/);
+                        if (match) {
+                          output = match[1];
+                        }
+                      } else {
+                        output = typeof tc.content === 'string' ? tc.content : JSON.stringify(tc.content);
+                      }
                     } else if (tc.content) {
                       output = typeof tc.content === 'string' ? tc.content : JSON.stringify(tc.content);
                     } else if (isFailed) {
                       output = 'Tool execution failed';
                     }
 
+                    // Transform result for Read tools to Cursor format
+                    // Check stored tool type since tc.kind may not be in update event
+                    const toolType = s.toolTypes?.get(toolCallId);
+                    const wasReadTool = toolType?.isRead || tc.kind === 'read';
+
+                    alert('[ACP-READ] Extracted output\nLength: ' + output.length + '\nFirst 100 chars: ' + output.slice(0, 100) + '\nWas Read tool: ' + wasReadTool);
+
+                    let finalResult = output;
+                    if (wasReadTool && output) {
+                      const lines = output.split('\n');
+                      finalResult = {
+                        contents: output,
+                        numCharactersInRequestedRange: output.length,
+                        totalLinesInFile: lines.length
+                      };
+                      alert('[ACP-READ] Transformed result\nLines: ' + lines.length + '\nChars: ' + output.length + '\nResult is object: ' + (typeof finalResult === 'object'));
+                    }
+
                     svc.updateComposerDataSetStore({{e}}, u => {
                       u("conversationMap", toolBubbleId, "toolFormerData", "status", finalStatus);
-                      u("conversationMap", toolBubbleId, "toolFormerData", "result", output);
+                      u("conversationMap", toolBubbleId, "toolFormerData", "result", finalResult);
                     });
                   }
                 }
