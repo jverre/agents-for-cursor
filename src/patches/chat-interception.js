@@ -165,6 +165,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                 const LIST_DIR_TYPE = 39;
                 const TASK_V2_TYPE = 48;
                 const TODO_WRITE_TYPE = 35;
+                const WEB_SEARCH_TYPE = 18;
 
                 // Detect tool type (use stored type for updates, or detect from event)
                 const storedType = s.toolTypes?.get(toolCallId);
@@ -173,6 +174,8 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                 const isEditTool = tc.kind === 'edit' || storedType?.isEdit;
                 const isTaskTool = tc.kind === 'think' || storedType?.isTask;
                 const isTodoWriteTool = (tc.kind === 'think' && tc.title?.toLowerCase().includes('todo')) || storedType?.isTodoWrite;
+                // Fetch tools: WebSearch and WebFetch
+                const isWebSearchTool = tc.kind === 'fetch' || storedType?.isWebSearch;
                 
                 // Glob and LS detection - these come with kind: 'search' but have specific input fields
                 // Glob tool: kind is 'search' and title contains 'Find' (NOT grep/Grep)
@@ -1161,6 +1164,88 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
 
                       svc.updateComposerDataSetStore({{e}}, u => {
                         u("conversationMap", toolBubbleId, "toolFormerData", "status", todoFinalStatus);
+                        u("conversationMap", toolBubbleId, "toolFormerData", "result", result);
+                      });
+                    }
+                  }
+
+                  return;
+                }
+
+                // ===== WEB_SEARCH TOOL (Type 18) =====
+                if (isWebSearchTool) {
+                  // Create bubble on first tool_call
+                  if (isNew && !s.toolBubbles.has(toolCallId)) {
+                    const query = inputObj.query || inputObj.search_term || tc.title || 'Web Search';
+
+                    s.bubbleId = null;
+                    s.text = '';
+
+                    const toolBubbleId = gen();
+                    s.toolBubbles.set(toolCallId, toolBubbleId);
+
+                    if (!s.toolTypes) s.toolTypes = new Map();
+                    s.toolTypes.set(toolCallId, { isWebSearch: true });
+
+                    // Store query for later
+                    if (!s.toolInputs) s.toolInputs = new Map();
+                    s.toolInputs.set(toolCallId, { query });
+
+                    // Create the tool bubble
+                    const rawArgs = { query };
+
+                    const toolBubble = {
+                      bubbleId: toolBubbleId,
+                      type: 2,
+                      text: '',
+                      richText: '',
+                      codeBlocks: [],
+                      createdAt: Date.now(),
+                      capabilityType: 'agentic'
+                    };
+
+                    window.acpLog?.('INFO', '[ACP] 🌐 Creating WEB_SEARCH bubble:', toolCallId, query?.substring(0, 50));
+
+                    svc.appendComposerBubbles(composerHandle, [toolBubble]);
+
+                    svc.updateComposerDataSetStore({{e}}, u => {
+                      u("conversationMap", toolBubbleId, "toolFormerData", {
+                        type: WEB_SEARCH_TYPE,
+                        tool: WEB_SEARCH_TYPE,
+                        toolCallId: toolCallId,
+                        status: 'running',
+                        requestId: toolBubbleId,
+                        rawArgs: JSON.stringify(rawArgs),
+                        params: rawArgs
+                      });
+                    });
+                  }
+
+                  // Handle completion
+                  if (isComplete || isFailed) {
+                    const webSearchFinalStatus = isFailed ? 'error' : 'completed';
+                    const toolBubbleId = s.toolBubbles.get(toolCallId);
+
+                    if (toolBubbleId) {
+                      // Get web search output
+                      let output = '';
+                      if (Array.isArray(tc.content)) {
+                        const textContent = tc.content.find(c => c.type === 'content');
+                        if (textContent?.content?.text) {
+                          output = textContent.content.text;
+                        }
+                      }
+
+                      window.acpLog?.('INFO', '[ACP] ✅ WebSearch completed');
+
+                      // Build result - web search results typically have references
+                      const result = {
+                        success: true,
+                        references: [] // Would parse actual references from output
+                      };
+
+                      svc.updateComposerDataSetStore({{e}}, u => {
+                        u("conversationMap", toolBubbleId, "toolFormerData", "status", webSearchFinalStatus);
                         u("conversationMap", toolBubbleId, "toolFormerData", "result", result);
                       });
                     }
