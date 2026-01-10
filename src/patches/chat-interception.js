@@ -173,7 +173,8 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                 // Glob and LS detection - these come with kind: 'search' but have specific input fields
                 // Glob tool: kind is 'search' and title contains 'Find' (NOT grep/Grep)
                 const isGlobTool = (tc.kind === 'search' && tc.title?.includes('Find') && !tc.title?.toLowerCase().includes('grep')) || storedType?.isGlob;
-                const isListDirTool = (tc.kind === 'search' && inputObj.target_directory && !inputObj.glob_pattern && !inputObj.pattern) || storedType?.isListDir;
+                // ListDir tool: kind is 'search' and title starts with 'List' or has target_directory without glob/pattern
+                const isListDirTool = (tc.kind === 'search' && (tc.title?.startsWith('List') || (inputObj.target_directory && !inputObj.glob_pattern && !inputObj.pattern))) || storedType?.isListDir;
                 // Grep tool: kind is 'search' and title contains 'Grep' or 'grep'
                 const isGrepTool = (tc.kind === 'search' && (tc.title?.includes('Grep') || tc.title?.includes('grep'))) || storedType?.isGrep;
                 
@@ -874,6 +875,131 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
 
                       svc.updateComposerDataSetStore({{e}}, u => {
                         u("conversationMap", toolBubbleId, "toolFormerData", "status", globFinalStatus);
+                        u("conversationMap", toolBubbleId, "toolFormerData", "result", result);
+                      });
+                    }
+                  }
+
+                  return;
+                }
+
+                // ===== LIST_DIR TOOL (Type 39) =====
+                if (isListDirTool) {
+                  // Create bubble on first tool_call
+                  if (isNew && !s.toolBubbles.has(toolCallId)) {
+                    const targetDir = inputObj.target_directory || inputObj.path || '.';
+
+                    s.bubbleId = null;
+                    s.text = '';
+
+                    const toolBubbleId = gen();
+                    s.toolBubbles.set(toolCallId, toolBubbleId);
+
+                    if (!s.toolTypes) s.toolTypes = new Map();
+                    s.toolTypes.set(toolCallId, { isListDir: true });
+
+                    // Store list_dir input for later use when building result
+                    if (!s.toolInputs) s.toolInputs = new Map();
+                    s.toolInputs.set(toolCallId, { targetDir });
+
+                    // Create the tool bubble
+                    const rawArgs = { target_directory: targetDir };
+
+                    const toolBubble = {
+                      bubbleId: toolBubbleId,
+                      type: 2,
+                      text: '',
+                      richText: '',
+                      codeBlocks: [],
+                      createdAt: Date.now(),
+                      capabilityType: 'agentic'
+                    };
+
+                    window.acpLog?.('INFO', '[ACP] 📁 Creating LIST_DIR bubble:', toolCallId, rawArgs);
+
+                    svc.appendComposerBubbles(composerHandle, [toolBubble]);
+
+                    svc.updateComposerDataSetStore({{e}}, u => {
+                      u("conversationMap", toolBubbleId, "toolFormerData", {
+                        type: LIST_DIR_TYPE,
+                        tool: LIST_DIR_TYPE,
+                        toolCallId: toolCallId,
+                        status: 'running',
+                        requestId: toolBubbleId,
+                        rawArgs: JSON.stringify(rawArgs),
+                        params: rawArgs
+                      });
+                    });
+                  }
+
+                  // Handle completion
+                  if (isComplete || isFailed) {
+                    const listDirFinalStatus = isFailed ? 'error' : 'completed';
+                    const toolBubbleId = s.toolBubbles.get(toolCallId);
+
+                    if (toolBubbleId) {
+                      // Parse list_dir output to get file/directory list
+                      // ACP uses type: 'content' with nested content.text
+                      let output = '';
+                      if (Array.isArray(tc.content)) {
+                        const textContent = tc.content.find(c => c.type === 'content');
+                        if (textContent?.content?.text) {
+                          output = textContent.content.text;
+                        }
+                      }
+                      
+                      window.acpLog?.('DEBUG', '[ACP] List_dir output text:', output?.substring(0, 200));
+                      
+                      const listDirData = s.toolInputs?.get(toolCallId);
+                      const targetDir = listDirData?.targetDir || '.';
+                      
+                      // Parse the output - typically contains directories and files
+                      // Format can be like "dir1/\ndir2/\nfile1.js\nfile2.ts"
+                      const lines = output.split('\n')
+                        .map(f => f.trim())
+                        .filter(f => f && !f.startsWith('Error'));
+                      
+                      // Separate directories and files
+                      const childrenDirs = [];
+                      const childrenFiles = [];
+                      
+                      lines.forEach(line => {
+                        if (line.endsWith('/')) {
+                          // It's a directory
+                          const dirName = line.slice(0, -1);
+                          childrenDirs.push({
+                            absPath: targetDir === '.' ? dirName : `${targetDir}/${dirName}`,
+                            childrenDirs: [],
+                            childrenFiles: [],
+                            childrenWereProcessed: false,
+                            fullSubtreeExtensionCounts: {}
+                          });
+                        } else {
+                          // It's a file
+                          childrenFiles.push({
+                            name: line
+                          });
+                        }
+                      });
+
+                      window.acpLog?.('INFO', '[ACP] ✅ List_dir completed with dirs:', childrenDirs.length, 'files:', childrenFiles.length);
+
+                      // Build result in Cursor's expected protobuf format
+                      // ListDirV2Result has directoryTreeRoot with absPath, childrenDirs, childrenFiles
+                      const result = {
+                        directoryTreeRoot: {
+                          absPath: targetDir,
+                          childrenDirs: childrenDirs,
+                          childrenFiles: childrenFiles,
+                          childrenWereProcessed: true,
+                          fullSubtreeExtensionCounts: {}
+                        }
+                      };
+
+                      window.acpLog?.('DEBUG', '[ACP] List_dir result object:', JSON.stringify(result, null, 2));
+
+                      svc.updateComposerDataSetStore({{e}}, u => {
+                        u("conversationMap", toolBubbleId, "toolFormerData", "status", listDirFinalStatus);
                         u("conversationMap", toolBubbleId, "toolFormerData", "result", result);
                       });
                     }
