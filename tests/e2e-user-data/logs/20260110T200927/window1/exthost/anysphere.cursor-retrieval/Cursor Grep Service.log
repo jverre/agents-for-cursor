@@ -1,0 +1,14 @@
+2026-01-10 20:09:31.843 [info] Initializing GrepClient
+2026-01-10 20:09:31.843 [info] Watching filesystem...
+2026-01-10 20:09:31.843 [info] GrepClient initialized successfully
+2026-01-10 20:09:31.843 [info] initialized head tracking (current branch = 'feat/acp-read-tool-rendering', current commit = b16421389eabd591fa519187f604d0bda2e44e53)
+2026-01-10 20:09:31.843 [info] bootstrapping repository index at '/Users/jacquesverre/Documents/code/opencursor' (cache_path=/Users/jacquesverre/Documents/code/opencursor/.git/cursor/crepe)
+2026-01-10 20:09:31.843 [info] looking for best possible index (current_sha=b16421389eabd591fa519187f604d0bda2e44e53)
+2026-01-10 20:09:31.843 [info] candidate index /Users/jacquesverre/Documents/code/opencursor/.git/cursor/crepe/da5532425cb01b4316ea789fde944b5cfc48b7e7 is 1 commits away
+2026-01-10 20:09:31.843 [info] loading index for commit da5532425cb01b4316ea789fde944b5cfc48b7e7
+2026-01-10 20:09:32.051 [info] reset index to head in 156.20725ms: 2 documents in commit, 74 in worktree
+2026-01-10 20:09:32.051 [info] constructed repository layout in 116.125µs
+2026-01-10 20:09:32.051 [info] index OK in 176.321583ms
+2026-01-10 20:09:39.798 [info] dropped 1 file events from ignored files in 1.01275ms (40 -> 39)
+2026-01-10 20:09:39.798 [info] refreshing index (39 stale documents detected)
+2026-01-10 20:09:39.803 [info] refreshed 16 new documents in 4.770625ms

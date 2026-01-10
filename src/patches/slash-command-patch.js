@@ -1,5 +1,5 @@
 // Slash Command Patch - Integrates ACP commands with Cursor's slash command UI
-console.log("[ACP] Loading slash-command-patch.js...");
+window.acpLog?.('INFO', "[ACP] Loading slash-command-patch.js...");
 
 try {
   // Track the current model selection globally
@@ -10,7 +10,7 @@ try {
     // Set the current model (called when model changes)
     setCurrentModel(modelName) {
       window.acpCurrentModel = modelName;
-      console.log('[ACP] Current model set to:', modelName);
+      window.acpLog?.('INFO', '[ACP] Current model set to:', modelName);
     },
 
     // Check if current model is an ACP model (uses global tracking)
@@ -24,7 +24,7 @@ try {
         const modelName = composerHandle?.data?.modelConfig?.modelName || '';
         return modelName.startsWith('acp:');
       } catch (error) {
-        console.error('[ACP] Error checking model:', error);
+        window.acpLog?.('ERROR', '[ACP] Error checking model:', error);
         return false;
       }
     },
@@ -56,7 +56,7 @@ try {
     async refreshCommands() {
       if (window.acpService) {
         await window.acpService.fetchSlashCommands('claude-code');
-        console.log('[ACP] Slash commands refreshed');
+        window.acpLog?.('INFO', '[ACP] Slash commands refreshed');
       }
     },
 
@@ -66,17 +66,17 @@ try {
         // Set current model to enable slash command filtering
         this.setCurrentModel('acp:claude-code');
         const commands = await window.acpService.initSession('claude-code');
-        console.log('[ACP] Initialized session, got', commands.length, 'slash commands');
+        window.acpLog?.('INFO', '[ACP] Initialized session, got', commands.length, 'slash commands');
         return commands;
       }
       return [];
     }
   };
 
-  console.log("[ACP] Slash command integration ready");
-  console.log("[ACP] Try: window.acpSlashCommandIntegration.getACPCommands()");
+  window.acpLog?.('INFO', "[ACP] Slash command integration ready");
+  window.acpLog?.('INFO', "[ACP] Try: window.acpSlashCommandIntegration.getACPCommands()");
 
 } catch (error) {
-  console.error("[ACP] Error in slash-command-patch.js:", error);
-  console.error("[ACP] Stack trace:", error.stack);
+  window.acpLog?.('ERROR', "[ACP] Error in slash-command-patch.js:", error);
+  window.acpLog?.('ERROR', "[ACP] Stack trace:", error.stack);
 }

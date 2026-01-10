@@ -1,0 +1,298 @@
+2026-01-10 20:09:28.093 [warning] Missing property "rpcFileLoggerFolder" in oldValue. Filling with value from initValue. Please add a migration if necessary.
+2026-01-10 20:09:28.097 [warning] Via 'product.json#extensionEnabledApiProposals' extension 'ms-toolsai.datawrangler' wants API proposal 'debugFocus' but that proposal DOES NOT EXIST. Likely, the proposal has been finalized (check 'vscode.d.ts') or was abandoned.
+2026-01-10 20:09:28.097 [warning] Via 'product.json#extensionEnabledApiProposals' extension 'ms-vscode.vscode-copilot-data-analysis' wants API proposal 'chatVariableResolver' but that proposal DOES NOT EXIST. Likely, the proposal has been finalized (check 'vscode.d.ts') or was abandoned.
+2026-01-10 20:09:28.097 [warning] Via 'product.json#extensionEnabledApiProposals' extension 'ms-python.python' wants API proposal 'terminalShellType' but that proposal DOES NOT EXIST. Likely, the proposal has been finalized (check 'vscode.d.ts') or was abandoned.
+2026-01-10 20:09:28.097 [warning] Via 'product.json#extensionEnabledApiProposals' extension 'ms-python.vscode-python-envs' wants API proposal 'terminalShellType' but that proposal DOES NOT EXIST. Likely, the proposal has been finalized (check 'vscode.d.ts') or was abandoned.
+2026-01-10 20:09:28.097 [warning] Via 'product.json#extensionEnabledApiProposals' extension 'github.copilot-chat' wants API proposal 'chatReadonlyPromptReference' but that proposal DOES NOT EXIST. Likely, the proposal has been finalized (check 'vscode.d.ts') or was abandoned.
+2026-01-10 20:09:28.098 [warning] Via 'product.json#extensionEnabledApiProposals' extension 'ms-azuretools.vscode-azure-github-copilot' wants API proposal 'lmTools' but that proposal DOES NOT EXIST. Likely, the proposal has been finalized (check 'vscode.d.ts') or was abandoned.
+2026-01-10 20:09:28.098 [warning] Via 'product.json#extensionEnabledApiProposals' extension 'vscjava.vscode-java-pack' wants API proposal 'lmTools' but that proposal DOES NOT EXIST. Likely, the proposal has been finalized (check 'vscode.d.ts') or was abandoned.
+2026-01-10 20:09:28.098 [warning] Via 'product.json#extensionEnabledApiProposals' extension 'apidev.azure-api-center' wants API proposal 'chatParticipant' but that proposal DOES NOT EXIST. Likely, the proposal has been finalized (check 'vscode.d.ts') or was abandoned.
+2026-01-10 20:09:28.098 [warning] Via 'product.json#extensionEnabledApiProposals' extension 'apidev.azure-api-center' wants API proposal 'languageModels' but that proposal DOES NOT EXIST. Likely, the proposal has been finalized (check 'vscode.d.ts') or was abandoned.
+2026-01-10 20:09:28.252 [info] [agent-layout] prevent_switch_layout enabled: skipping auto-switch, will show walkthrough on manual switch
+2026-01-10 20:09:28.807 [info] Loading development extension at /Users/jacquesverre/Documents/code/opencursor
+2026-01-10 20:09:28.808 [error] Extension 'ms-toolsai.jupyter' appears in product.json but enables LESS API proposals than the extension wants.
+package.json (LOSES): notebookDeprecated, notebookMessaging, notebookMime, contribNotebookStaticPreloads, portsAttributes, quickPickSortByLabel, notebookKernelSource, interactiveWindow, quickPickItemTooltip, notebookExecution, notebookCellExecution, notebookVariableProvider, notebookReplDocument
+product.json (WINS): notebookDeprecated, notebookMessaging, notebookMime, notebookCellExecutionState, quickPickSortByLabel, notebookKernelSource, interactiveWindow, notebookControllerAffinityHidden, contribNotebookStaticPreloads, quickPickItemTooltip, notebookExecution, notebookCellExecution, notebookVariableProvider, notebookReplDocument
+2026-01-10 20:09:28.808 [error] Proceeding with EXTRA proposals (portsAttributes) because extension is in development mode. Still, this EXTENSION WILL BE BROKEN unless product.json is updated.
+2026-01-10 20:09:28.822 [info] [cweijan.vscode-mysql-client2]: Command `mysql2.refresh` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.822 [info] [cweijan.vscode-mysql-client2]: Command `mysql2.refresh.all` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.822 [info] [cweijan.vscode-mysql-client2]: Command `mysql.name.copy` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.822 [info] [cweijan.vscode-mysql-client2]: Command `mysql.console.open` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.822 [info] [cweijan.vscode-mysql-client2]: Command `mysql.server.info` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.822 [info] [cweijan.vscode-mysql-client2]: Command `mysql.node.create` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.822 [info] [cweijan.vscode-mysql-client2]: Command `mysql.runSQL` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.822 [info] [cweijan.vscode-mysql-client2]: Command `mysql.runSQLInNew` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.822 [info] [cweijan.vscode-mysql-client2]: Command `mysql.runSQLAsJSON` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.822 [info] [cweijan.vscode-mysql-client2]: Command `mysql.runSQLWithoutParse` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.822 [info] [cweijan.vscode-mysql-client2]: Command `mysql.runAllQuery` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.822 [info] [cweijan.vscode-mysql-client2]: Command `mysql.runAllQueryWithoutParse` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.822 [info] [cweijan.vscode-mysql-client2]: Command `mysql.notebook.sql` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.822 [info] [cweijan.vscode-mysql-client2]: Command `mysql.node.filterChildren` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.host.copy` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.connection.add` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.connection.add.viaGroup` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.connection.edit` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.connection.copy` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.connection.disable` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.connection.delete` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.connection.terminal` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.connection.startRdp` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.connection.selectDb` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.connection.copyKey` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.connection.quickConnect` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.db.active` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.db.truncate` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.database.add` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.db.drop` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.db.active.switch` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.document.generate` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.template.schema` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.package.source` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.package.drop` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.query.switch` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.query.link` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.query.add` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.query.book.add` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.query.rename` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.query.delete` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.template.new` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.delete.procedure` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.delete.function` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.823 [info] [cweijan.vscode-mysql-client2]: Command `mysql.delete.event` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.824 [info] [cweijan.vscode-mysql-client2]: Command `mysql.delete.trigger` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.824 [info] [cweijan.vscode-mysql-client2]: Command `mysql.struct.diff` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.824 [info] [cweijan.vscode-mysql-client2]: Command `mysql.data.dump` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.824 [info] [cweijan.vscode-mysql-client2]: Command `mysql.struct.dump` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.824 [info] [cweijan.vscode-mysql-client2]: Command `mysql.sql.import` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.824 [info] [cweijan.vscode-mysql-client2]: Command `mysql.mock.run` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.824 [info] [cweijan.vscode-mysql-client2]: Command `mysql.mock.table` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.824 [info] [cweijan.vscode-mysql-client2]: Command `mysql.template.table.select` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.824 [info] [cweijan.vscode-mysql-client2]: Command `mysql.template.table.insert` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.824 [info] [cweijan.vscode-mysql-client2]: Command `mysql.template.table.update` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.824 [info] [cweijan.vscode-mysql-client2]: Command `mysql.template.table.delete` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.824 [info] [cweijan.vscode-mysql-client2]: Command `mysql.template.table` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.824 [info] [cweijan.vscode-mysql-client2]: Command `mysql.table.copy` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.824 [info] [cweijan.vscode-mysql-client2]: Command `mysql.table.truncate` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.824 [info] [cweijan.vscode-mysql-client2]: Command `mysql.table.drop` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.824 [info] [cweijan.vscode-mysql-client2]: Command `mysql.table.sort` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.824 [info] [cweijan.vscode-mysql-client2]: Command `mysql.changeTableName` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.824 [info] [cweijan.vscode-mysql-client2]: Command `mysql.table.design` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.824 [info] [cweijan.vscode-mysql-client2]: Command `mysql.table.source` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.824 [info] [cweijan.vscode-mysql-client2]: Command `mysql.table.show` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.824 [info] [cweijan.vscode-mysql-client2]: Command `mysql.table.fullTextSearch` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.824 [info] [cweijan.vscode-mysql-client2]: Command `mysql.column.add` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.824 [info] [cweijan.vscode-mysql-client2]: Command `mysql.column.up` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.824 [info] [cweijan.vscode-mysql-client2]: Command `mysql.column.down` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.824 [info] [cweijan.vscode-mysql-client2]: Command `mysql.column.update` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.column.drop` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.column.createIndex` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.index.modify` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.index.drop` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.template.view` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.delete.view` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.view.source` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.user.grant` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.change.user` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.template.user` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.delete.user` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.s3.selectBuckets` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.file.delete` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.s3.url.temp` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.s3.url.public` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.s3.openSite` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.file.new` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.file.upload` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.folder.upload` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.folder.new` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.bucket.new` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.path.copy` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.file.download` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.node.rename` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.node.favorite` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.node.favorite.cancel` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.node.favorite.clear` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.fs.terminal` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.ftp.connect` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.es.stream.new` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.es.index.new` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.es.template.search` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.825 [info] [cweijan.vscode-mysql-client2]: Command `mysql.es.template.insert` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.es.template.update` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.es.template.aggregations` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.es.template.analyze` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.es.index.showSettings` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.es.index.mapping` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.es.index.delete` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.es.restore` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.mq.consume` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.mq.produce` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.kafka.topic.new` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.kafka.topic.delete` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.kafka.consumer.delete` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.kafka.offset.setOffset` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.kafka.offset.resetOffset` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.keyValue.node.new` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.keyValue.node.delete` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.keyValue.node.edit` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.mongo.collection.insert` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.mongo.collection.delete` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.mongo.dump` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.mongo.restore` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.connection.neo4j.browser` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.rabbit.queue.new` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.rabbit.queue.delete` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.rabbit.vhost.new` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.rabbit.vhost.delete` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.rabbit.user.new` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.rabbit.user.delete` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.rabbit.user.updatePassword` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.rabbit.user.addRole` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.rabbit.role.delete` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.redis.connection.status` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.826 [info] [cweijan.vscode-mysql-client2]: Command `mysql.redis.key.detail` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.redis.key.new` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.redis.key.del` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.redis.dump` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.redis.restore` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.docker.compose.run` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.docker.node.drop` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.docker.container.new` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.docker.container.id.copy` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.docker.container.open.ports` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.docker.container.cleanUp` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.docker.container.restart` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.docker.container.start` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.docker.container.stop` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.docker.container.pause` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.docker.container.unpause` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.docker.container.inspect` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.docker.container.showLogs` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.docker.container.updateRestartPolicy` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.docker.container.showStats` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.docker.container.terminal` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.docker.image.new` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.docker.image.cleanUp` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.docker.image.run` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.docker.image.runDetach` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.docker.image.pull` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.docker.image.id.copy` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.docker.image.document` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.docker.network.new` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.docker.network.cleanUp` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.docker.volume.new` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.docker.volume.cleanUp` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.ssh.connect` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.827 [info] [cweijan.vscode-mysql-client2]: Command `mysql.ssh.forward.port` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.828 [info] [cweijan.vscode-mysql-client2]: Command `mysql.ssh.user.new` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.828 [info] [cweijan.vscode-mysql-client2]: Command `mysql.ssh.user.delete` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.828 [info] [cweijan.vscode-mysql-client2]: Command `mysql.ssh.user.updatePassword` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.828 [info] [cweijan.vscode-mysql-client2]: Command `mysql.ssh.user.uploadPublicKey` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.828 [info] [cweijan.vscode-mysql-client2]: Command `mysql.ssh.folder.terminal` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.828 [info] [cweijan.vscode-mysql-client2]: Command `mysql.ssh.server.status` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.828 [info] [cweijan.vscode-mysql-client2]: Command `mysql.ssh.sh.execute` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.828 [info] [cweijan.vscode-mysql-client2]: Command `mysql.notebook.new` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.828 [info] [cweijan.vscode-mysql-client2]: Command `mysql.notebook.open` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.828 [info] [cweijan.vscode-mysql-client2]: Command `mysql.treeview.collapse` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.828 [info] [cweijan.vscode-mysql-client2]: Command `mysql.treeview.nosql.collapse` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.828 [info] [cweijan.vscode-mysql-client2]: Command `mysql.history.open` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.828 [info] [cweijan.vscode-mysql-client2]: Command `mysql.history.open.all` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.828 [info] [cweijan.vscode-mysql-client2]: Command `mysql.history.clear` already registered by Database Client (cweijan.vscode-database-client2)
+2026-01-10 20:09:28.828 [info] [Oracle.oracle-java]: Command `workbench.action.debug.run` already registered by Java (Oracle.oracle-java)
+2026-01-10 20:09:28.828 [info] [Oracle.oracle-java]: Command `workbench.action.debug.start` already registered by Java (Oracle.oracle-java)
+2026-01-10 20:09:28.828 [info] [Oracle.oracle-java]: Command `jdk.select.editor.projects` already registered by Java (Oracle.oracle-java)
+2026-01-10 20:09:28.828 [info] [cweijan.vscode-mysql-client2]: The `mysql.run.more` submenu was already previously registered.
+2026-01-10 20:09:28.828 [info] [cweijan.vscode-mysql-client2]: The `mysql.template.sql.table` submenu was already previously registered.
+2026-01-10 20:09:28.829 [info] [cweijan.vscode-mysql-client2]: The `mysql.es.template.other` submenu was already previously registered.
+2026-01-10 20:09:28.829 [warning] [cweijan.vscode-mysql-client2]: The `mysql.run.more` submenu was already contributed to the `editor/context` menu.
+2026-01-10 20:09:28.829 [warning] [cweijan.vscode-mysql-client2]: The `mysql.template.sql.table` submenu was already contributed to the `view/item/context` menu.
+2026-01-10 20:09:28.829 [warning] [cweijan.vscode-mysql-client2]: The `mysql.es.template.other` submenu was already contributed to the `view/item/context` menu.
+2026-01-10 20:09:28.832 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.completionTriggerKey'. This property is already registered.
+2026-01-10 20:09:28.832 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.enableFlexibleSQLParser'. This property is already registered.
+2026-01-10 20:09:28.832 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.executeCursorSQLByShortcut'. This property is already registered.
+2026-01-10 20:09:28.832 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.confirmWhenUpdateWithoutWhere'. This property is already registered.
+2026-01-10 20:09:28.832 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.splitSQLByNewLine'. This property is already registered.
+2026-01-10 20:09:28.832 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.variableIndicator'. This property is already registered.
+2026-01-10 20:09:28.832 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.maxSQLParseLength'. This property is already registered.
+2026-01-10 20:09:28.832 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.defaultSelectLimit'. This property is already registered.
+2026-01-10 20:09:28.832 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.terminalLocation'. This property is already registered.
+2026-01-10 20:09:28.832 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.escapedAllObjectName'. This property is already registered.
+2026-01-10 20:09:28.832 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.rememberSQLVariables'. This property is already registered.
+2026-01-10 20:09:28.832 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.capitalizeKeywordsWhenFormatting'. This property is already registered.
+2026-01-10 20:09:28.833 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.autoPagingSQL'. This property is already registered.
+2026-01-10 20:09:28.833 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.queryWithSchema'. This property is already registered.
+2026-01-10 20:09:28.833 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.enableEditorCodeLens'. This property is already registered.
+2026-01-10 20:09:28.833 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.enableSQLVariable'. This property is already registered.
+2026-01-10 20:09:28.833 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.highlightSQLBlock'. This property is already registered.
+2026-01-10 20:09:28.833 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.bindConnectionByActiveMark'. This property is already registered.
+2026-01-10 20:09:28.833 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.disableSQLCompletion'. This property is already registered.
+2026-01-10 20:09:28.833 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.openResultsAsVertically'. This property is already registered.
+2026-01-10 20:09:28.833 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.splitEditorWhenQuery'. This property is already registered.
+2026-01-10 20:09:28.833 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.autoGetTableCount'. This property is already registered.
+2026-01-10 20:09:28.833 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.showSecurity'. This property is already registered.
+2026-01-10 20:09:28.833 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.showTrigger'. This property is already registered.
+2026-01-10 20:09:28.833 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.saveConnectionExpandedState'. This property is already registered.
+2026-01-10 20:09:28.833 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.autoSync'. This property is already registered.
+2026-01-10 20:09:28.833 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.telemetry.usesOnlineServices'. This property is already registered.
+2026-01-10 20:09:28.833 [warning] [cweijan.vscode-mysql-client2]: Cannot register 'database-client.disableTLSVerification'. This property is already registered.
+2026-01-10 20:09:28.833 [warning] [ms-python.python]: Cannot register 'python.venvPath'. This property is already registered.
+2026-01-10 20:09:28.877 [warning] [Anthropic.claude-code]: View container 'claude-sidebar-secondary' does not exist and all views registered to it will be added to 'Explorer'.
+2026-01-10 20:09:28.877 [error] [cweijan.vscode-mysql-client2]: Cannot register multiple views with same id `github.cweijan.mysql`
+2026-01-10 20:09:28.877 [error] [cweijan.vscode-mysql-client2]: Cannot register multiple views with same id `github.dbclient.history`
+2026-01-10 20:09:28.877 [error] [cweijan.vscode-mysql-client2]: Cannot register multiple views with same id `github.cweijan.nosql`
+2026-01-10 20:09:28.877 [error] [cweijan.vscode-mysql-client2]: Cannot register multiple views with same id `dbclient.search.result`
+2026-01-10 20:09:28.877 [error] [cweijan.vscode-mysql-client2]: Cannot register multiple views with same id `dbclinet.variable.config.view`
+2026-01-10 20:09:28.889 [error] [cweijan.vscode-mysql-client2]: Notebook type 'sql-book' already used
+2026-01-10 20:09:28.890 [error] [cweijan.vscode-mysql-client2]: Notebook type 'sql-query-book' already used
+2026-01-10 20:09:28.892 [error] Tool "dbclient-get-databases" is already registered.: Error: Tool "dbclient-get-databases" is already registered.
+    at NIo.registerToolData (vscode-file://vscode-app/Users/jacquesverre/.cursor-test-installation/Cursor.app/Contents/Resources/app/out/vs/workbench/workbench.desktop.main.js:14767:20018)
+    at mgc._handler (vscode-file://vscode-app/Users/jacquesverre/.cursor-test-installation/Cursor.app/Contents/Resources/app/out/vs/workbench/workbench.desktop.main.js:14740:17318)
+    at mgc._handle (vscode-file://vscode-app/Users/jacquesverre/.cursor-test-installation/Cursor.app/Contents/Resources/app/out/vs/workbench/workbench.desktop.main.js:915:22667)
+    at mgc.acceptUsers (vscode-file://vscode-app/Users/jacquesverre/.cursor-test-installation/Cursor.app/Contents/Resources/app/out/vs/workbench/workbench.desktop.main.js:915:22571)
+    at dUo._handleExtensionPoint (vscode-file://vscode-app/Users/jacquesverre/.cursor-test-installation/Cursor.app/Contents/Resources/app/out/vs/workbench/workbench.desktop.main.js:16257:10695)
+    at bUo._doHandleExtensionPoints (vscode-file://vscode-app/Users/jacquesverre/.cursor-test-installation/Cursor.app/Contents/Resources/app/out/vs/workbench/workbench.desktop.main.js:16257:9438)
+    at bUo._resolveAndProcessExtensions (vscode-file://vscode-app/Users/jacquesverre/.cursor-test-installation/Cursor.app/Contents/Resources/app/out/vs/workbench/workbench.desktop.main.js:16256:73813)
+    at async bUo._initialize (vscode-file://vscode-app/Users/jacquesverre/.cursor-test-installation/Cursor.app/Contents/Resources/app/out/vs/workbench/workbench.desktop.main.js:16256:71683) Tool "dbclient-get-databases" is already registered.
+2026-01-10 20:09:29.005 [error] [cweijan.vscode-mysql-client2]: This authentication id 'dbclient.auth' has already been registered
+2026-01-10 20:09:29.007 [warning] No search provider registered for scheme: file, waiting
+2026-01-10 20:09:29.114 [warning] [Debug] Function 'testLinearIssues' already registered, overwriting
+2026-01-10 20:09:29.114 [info] [Debug] Registered testLinearIssues function
+2026-01-10 20:09:29.140 [info] [WorktreeCleanupCron] Registering cleanup task with interval of 6 hours
+2026-01-10 20:09:29.140 [info] [WorktreeCleanupCron] Cleanup task registered with interval of 6 hours (21600000ms)
+2026-01-10 20:09:30.080 [info] Started local extension host with pid 51378.
+2026-01-10 20:09:30.736 [info] [LocalProcessExtensionHost] getDefaultShell result: /bin/zsh
+2026-01-10 20:09:30.737 [info] [LocalProcessExtensionHost] Final userTerminalHint: /bin/zsh
+2026-01-10 20:09:30.791 [warning] 
+
+----------------------------------------------
+***	Installation has been modified on disk ***
+----------------------------------------------
+
+
+2026-01-10 20:09:30.820 [info] [Debug] Registered command palette action: debug.classifyRecentConversations
+2026-01-10 20:09:30.821 [info] [Debug] Registered command palette action: debug.getApplicationProperty
+2026-01-10 20:09:30.821 [info] [Debug] Registered command palette action: debug.logComposer
+2026-01-10 20:09:30.821 [info] [Debug] Registered command palette action: debug.getContextKeyValue
+2026-01-10 20:09:30.821 [info] [Debug] Registered command palette action: debug.testLinearIssues
+2026-01-10 20:09:30.872 [info] OpenInBrowserWatcher: Initializing terminal log watcher
+2026-01-10 20:09:30.958 [info] [Cursor Proclist Polling] Config applied to Main process
+2026-01-10 20:09:30.958 [info] [Cursor Proclist Polling] Started polling (every 5 min)
+2026-01-10 20:09:31.060 [error] [Extension Host] (node:51378) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `Cursor Helper (Plugin) --trace-deprecation ...` to show where the warning was created)
+2026-01-10 20:09:31.094 [info] [perf] Render performance baseline is 17ms
+2026-01-10 20:09:33.186 [info] Auto updating outdated extensions. anthropic.claude-code
+2026-01-10 20:09:34.187 [info] Auto update disabled for extension anthropic.claude-code
+2026-01-10 20:09:35.144 [error] MainThreadChatAgents2#$updateAgent: No agent with handle 0 registered
+2026-01-10 20:09:35.161 [error] MainThreadChatAgents2#$updateAgent: No agent with handle 1 registered
+2026-01-10 20:09:35.191 [error] Tool "dbclient-get-databases" already has an implementation. {"name":"Error","message":"Tool \"dbclient-get-databases\" already has an implementation."}
+2026-01-10 20:09:35.191 [error] Tool "dbclient-get-tables" already has an implementation. {"name":"Error","message":"Tool \"dbclient-get-tables\" already has an implementation."}
+2026-01-10 20:09:35.191 [error] Tool "dbclient-execute-query" already has an implementation. {"name":"Error","message":"Tool \"dbclient-execute-query\" already has an implementation."}
+2026-01-10 20:09:35.225 [info] [ShellExec] Created session e2bdb877-6a70-4932-8d9f-5f1cae53ee1c on LocalProcess host
+2026-01-10 20:09:37.163 [error] [Extension Host] [otel.error] {"stack":"OTLPExporterError: Bad Request\n\tat IncomingMessage.<anonymous> (/Users/jacquesverre/.cursor-test-installation/Cursor.app/Contents/Resources/app/node_modules/@opentelemetry/otlp-exporter-base/build/src/transport/http-transport-utils.js:52:31)\n\tat IncomingMessage.emit (node:events:531:35)\n\tat endReadableNT (node:internal/streams/readable:1698:12)\n\tat process.processTicksAndRejections (node:internal/process/task_queues:90:21)","message":"Bad Request","code":"400","name":"OTLPExporterError","data":"{\"error\":\"Trace spans collection is not enabled for this user\"}"}
+2026-01-10 20:09:57.164 [error] [Extension Host] [ACP Agent] ❌ STDERR: Error: The provided `old_string` does not appear in the file: "Hello World
+This is a test file.
+Line three.".
+
+No edits were applied.
+    at replaceAndCalculateLocation (file:///Users/jacquesverre/.nv
+2026-01-10 20:10:00.972 [warning] [backup tracker] suspended, ignoring unregister event file:///Users/jacquesverre/Documents/code/opencursor/package.json 
+2026-01-10 20:10:01.070 [info] [Cursor Proclist Polling] Stopped polling

@@ -37,12 +37,15 @@
     ]
   },
   "scripts": {
+    "start": "node scripts/start-cursor.js",
     "test": "jest",
     "test:unit": "jest tests/unit",
     "test:integration": "jest tests/integration",
     "test:e2e": "jest tests/e2e",
+    "test:e2e:local": "LOCAL=true jest tests/e2e",
     "test:watch": "jest --watch",
     "test:ci": "jest --coverage --ci",
+    "setup:check": "node tests/helpers/cursor-installer.js check --isolated",
     "download-cursor": "node tests/helpers/cursor-installer.js download",
     "package": "npx vsce package --no-dependencies --allow-star-activation"
   },

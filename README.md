@@ -51,3 +51,5 @@ The "Agents for Cursor" extension surfaces commands to manage the extension:
 ## Contributions
 
 The extension is work in progress, if you have any feedback or run into issues just open a Github issue and I'll take a look !
+
+//test

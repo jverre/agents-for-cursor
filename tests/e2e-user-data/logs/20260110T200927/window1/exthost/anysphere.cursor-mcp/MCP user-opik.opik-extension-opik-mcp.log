@@ -1,0 +1,10 @@
+2026-01-10 20:09:35.223 [info] Handling CreateClient action
+2026-01-10 20:09:35.223 [info] Starting new stdio process with command: npx -y opik-mcp --apiKey xxDUEIuyUyERM61xFtPvpjSvn --apiUrl https://www.comet.com/opik/api --workspace default --projectName cursor
+2026-01-10 20:09:36.281 [info] Successfully connected to stdio server
+2026-01-10 20:09:36.281 [info] Storing stdio client user-opik.opik-extension-opik-mcp
+2026-01-10 20:09:36.281 [info] CreateClient completed, server stored: true
+2026-01-10 20:09:36.966 [info] Handling ListOfferings action, server stored: true
+2026-01-10 20:09:36.966 [info] Connected to stdio server, fetching offerings
+2026-01-10 20:09:37.002 [info] listOfferings: Found 13 tools
+2026-01-10 20:09:37.007 [info] listResources: Found 2 resources
+2026-01-10 20:09:37.010 [info] Found 13 tools, 0 prompts, and 2 resources

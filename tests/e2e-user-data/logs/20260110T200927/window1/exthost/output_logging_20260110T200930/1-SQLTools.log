@@ -1,0 +1,100 @@
+[1768075771113] INFO  (ext): SQLTools is starting
+[1768075771115] INFO  (ext): initializing language client...
+[1768075771115] INFO  (ext): Registering client for languages [{"scheme":"sqltools"},{"language":"sql","scheme":"untitled"},{"language":"sql","scheme":"file"},{"language":"sql","scheme":"sqltools"}]
+    ns: "lc"
+[1768075771118] INFO  (ext): loading plugins...
+[1768075771118] INFO  (ext): registering Formatter Plugin.
+    plugin: {
+      "name": "Formatter Plugin"
+    }
+[1768075771118] INFO  (ext): registering Connection Manager Plugin.
+    plugin: {
+      "name": "Connection Manager Plugin"
+    }
+[1768075771118] INFO  (ext): registering CodeLens Plugin.
+    plugin: {
+      "name": "CodeLens Plugin",
+      "registeredLanguages": []
+    }
+[1768075771119] INFO  (ext): registering Dependency Manager Plugin.
+    plugin: {
+      "name": "Dependency Manager Plugin",
+      "installingDrivers": []
+    }
+[1768075771120] INFO  (ext): Connection explorer changed. Will be updated.
+    ns: "conn-man:explorer"
+[1768075771120] INFO  (ext): registering History Manager Plugin.
+    plugin: {
+      "name": "History Manager Plugin"
+    }
+[1768075771120] INFO  (ext): registering Bookmarks Manager Plugin.
+    plugin: {
+      "name": "Bookmarks Manager Plugin"
+    }
+[1768075771121] INFO  (ext): registering Authentication Provider Plugin.
+    plugin: {
+      "name": "Authentication Provider Plugin",
+      "isRegistered": false
+    }
+[1768075771121] INFO  (ext): registering Object Drop-in Provider (plugin).
+    plugin: {
+      "type": "plugin",
+      "name": "Object Drop-in Provider",
+      "isRegistered": false
+    }
+[1768075771123] INFO  (ext): SQLTools activation completed. 9.616834 ms
+[1768075771123] INFO  (ext): Formatter Plugin registered!
+[1768075771123] INFO  (ext): CodeLens Plugin registered!
+[1768075771123] INFO  (ext): Dependency Manager Plugin registered!
+[1768075771123] INFO  (ext): Connection Manager Plugin registered!
+[1768075771123] INFO  (ext): History Manager Plugin registered!
+[1768075771123] INFO  (ext): Bookmarks Manager Plugin registered!
+[1768075771123] INFO  (ext): Authentication Provider Plugin registered!
+[1768075771123] INFO  (ext): Object Drop-in Provider (plugin) registered!
+[1768075771309] INFO  (ls): SQLTools Server started!
+===============================
+Using node runtime?: no
+ExecPath: /Users/jacquesverre/.cursor-test-installation/Cursor.app/Contents/Frameworks/Cursor Helper (Plugin).app/Contents/MacOS/Cursor Helper (Plugin) 
+===============================
+[1768075771421] INFO  (ext): LanguageClient ready
+    ns: "lc"
+[1768075771442] INFO  (ext): registering MySQL/MariaDB/TiDB Plugin (driver).
+    plugin: {
+      "extensionId": "mtxr.sqltools-driver-mysql",
+      "name": "MySQL/MariaDB/TiDB Plugin",
+      "type": "driver"
+    }
+[1768075771442] INFO  (ext): registering ClickHouse Driver Plugin (driver).
+    plugin: {
+      "extensionId": "ultram4rine.sqltools-clickhouse-driver",
+      "name": "ClickHouse Driver Plugin",
+      "type": "driver"
+    }
+[1768075771421] INFO  (ls): Initialized with node version:v22.20.0
+[1768075771443] INFO  (ls): REQUEST RECEIVED => ls/RegisterPlugin
+[1768075771443] INFO  (ls): request to register plugin: "/Users/jacquesverre/.cursor/extensions/mtxr.sqltools-driver-mysql-0.6.5-universal/out/ls/plugin.js"
+[1768075771559] INFO  (ls): Driver mysql registered!
+    place: "driver-map"
+    ns: "ls-context"
+[1768075771560] INFO  (ls): Driver mariadb registered!
+    place: "driver-map"
+    ns: "ls-context"
+[1768075771560] INFO  (ls): Driver tidb registered!
+    place: "driver-map"
+    ns: "ls-context"
+[1768075771560] INFO  (ls): REQUEST RECEIVED => ls/RegisterPlugin
+[1768075771560] INFO  (ls): request to register plugin: "/Users/jacquesverre/.cursor/extensions/ultram4rine.sqltools-clickhouse-driver-0.10.0-universal/out/ls/plugin.js"
+[1768075771597] INFO  (ls): Driver clickhouse registered!
+    place: "driver-map"
+    ns: "ls-context"
+[1768075771661] INFO  (ext): MySQL/MariaDB/TiDB Plugin (driver) registered!
+[1768075771666] INFO  (ext): ClickHouse Driver Plugin (driver) registered!
+[1768075772080] INFO  (ext): Connection explorer changed. Will be updated.
+    ns: "conn-man:explorer"
+[1768075772667] INFO  (ext): EXECUTING COMMAND => sqltools.refreshTree
+[1768075772667] INFO  (ext): Connection explorer changed. Will be updated.
+    ns: "conn-man:explorer"
+[1768075773121] INFO  (ext): Connection explorer changed. Will be updated.
+    ns: "conn-man:explorer"
+[1768075776860] INFO  (ext): Connection explorer changed. Will be updated.
+    ns: "conn-man:explorer"

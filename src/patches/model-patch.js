@@ -1,5 +1,5 @@
 // Model Debug Helper - Exposes ACP model info for debugging
-console.log("[ACP] Loading model-patch.js...");
+window.acpLog?.('INFO', "[ACP] Loading model-patch.js...");
 
 try {
   // Expose window.acpModels for debugging
@@ -16,14 +16,14 @@ try {
       },
       configurable: true
     });
-    console.log("[ACP] window.acpModels getter installed (for debugging)");
+    window.acpLog?.('INFO', "[ACP] window.acpModels getter installed (for debugging)");
   }
 
-  console.log("[ACP] model-patch.js loaded successfully");
-  console.log("[ACP] ℹ️  Note: ACP models must be added manually via Settings > Models > Add Custom Model");
-  console.log("[ACP] ℹ️  Use model name format: 'Claude Code (ACP)' or 'acp:claude-code'");
+  window.acpLog?.('INFO', "[ACP] model-patch.js loaded successfully");
+  window.acpLog?.('INFO', "[ACP] ℹ️  Note: ACP models must be added manually via Settings > Models > Add Custom Model");
+  window.acpLog?.('INFO', "[ACP] ℹ️  Use model name format: 'Claude Code (ACP)' or 'acp:claude-code'");
 
 } catch (error) {
-  console.error("[ACP] FATAL ERROR in model-patch.js:", error);
-  console.error("[ACP] Stack trace:", error.stack);
+  window.acpLog?.('ERROR', "[ACP] FATAL ERROR in model-patch.js:", error);
+  window.acpLog?.('ERROR', "[ACP] Stack trace:", error.stack);
 }

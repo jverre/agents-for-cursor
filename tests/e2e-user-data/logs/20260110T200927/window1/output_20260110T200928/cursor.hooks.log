@@ -1,0 +1,11 @@
+[2026-01-10T20:09:29.007Z] Initializing Cursor Hooks Service...
+[2026-01-10T20:09:29.007Z] Project config path: /Users/jacquesverre/Documents/code/opencursor/.cursor/hooks.json
+[2026-01-10T20:09:29.007Z] User config path: /Users/jacquesverre/.cursor/hooks.json
+[2026-01-10T20:09:29.007Z] Enterprise config path: file:///Library/Application%20Support/Cursor/hooks.json
+[2026-01-10T20:09:29.007Z] Reloading hooks configuration...
+[2026-01-10T20:09:29.008Z] No enterprise hooks configuration found
+[2026-01-10T20:09:29.011Z] No user hooks configuration found
+[2026-01-10T20:09:29.065Z] No project hooks configuration found
+[2026-01-10T20:09:29.065Z] Refreshing team hooks...
+[2026-01-10T20:09:36.070Z] No active team hooks found for OS
+[2026-01-10T20:09:36.070Z] Cursor Hooks Service initialized successfully

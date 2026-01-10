@@ -1,0 +1,49 @@
+2026-01-10 20:08:55.873 [info] Handling CreateClient action
+2026-01-10 20:08:55.873 [info] Creating streamableHttp transport
+2026-01-10 20:08:55.873 [info] Handling CreateClient action
+2026-01-10 20:08:55.873 [info] Creating streamableHttp transport
+2026-01-10 20:08:56.200 [info] Handling ListOfferings action, server stored: false
+2026-01-10 20:08:56.200 [error] No server info found
+2026-01-10 20:08:56.206 [info] Using OAuth scopes: mcp:connect
+2026-01-10 20:08:56.206 [info] Connecting to streamableHttp server
+2026-01-10 20:08:56.209 [info] No stored tokens found
+2026-01-10 20:08:56.460 [info] Using OAuth scopes: mcp:connect
+2026-01-10 20:08:56.461 [info] Connecting to streamableHttp server
+2026-01-10 20:08:56.461 [info] No stored tokens found
+2026-01-10 20:08:56.916 [info] Handling ListOfferings action, server stored: false
+2026-01-10 20:08:56.916 [error] No server info found
+2026-01-10 20:08:57.411 [info] No stored client information found
+2026-01-10 20:08:57.412 [info] Using redirect URL {"url":"cursor://anysphere.cursor-mcp/oauth/callback"}
+2026-01-10 20:08:57.424 [info] No stored client information found
+2026-01-10 20:08:57.425 [info] Using redirect URL {"url":"cursor://anysphere.cursor-mcp/oauth/callback"}
+2026-01-10 20:08:57.937 [info] Saving client information {"redirects":1,"clientIdPresent":true}
+2026-01-10 20:08:57.939 [info] Using redirect URL {"url":"cursor://anysphere.cursor-mcp/oauth/callback"}
+2026-01-10 20:08:57.939 [info] No stored tokens found
+2026-01-10 20:08:57.940 [info] Using redirect URL {"url":"cursor://anysphere.cursor-mcp/oauth/callback"}
+2026-01-10 20:08:57.940 [info] Saving PKCE code verifier {"verifierLen":43}
+2026-01-10 20:08:57.942 [info] Redirect to authorization requested {"url":"https://www.figma.com/oauth/mcp?response_type=code&client_id=kyE8Ct29FGoibqyP6h4gDM&code_challenge=v5O7bpGTq26Ak2ZJq7JzVsvxD1P-TUIrrcgEpRX2ygg&code_challenge_method=S256&redirect_uri=cursor%3A%2F%2Fanysphere.cursor-mcp%2Foauth%2Fcallback&state=eyJpZCI6InVzZXItRmlnbWEifQ&scope=mcp%3Aconnect&resource=https%3A%2F%2Fmcp.figma.com%2Fmcp"}
+2026-01-10 20:08:57.944 [info] Stored server URL for OAuth flow
+2026-01-10 20:08:57.944 [info] OAuth provider needs auth callback during connection
+2026-01-10 20:08:57.944 [warning] Error connecting to streamableHttp server, falling back to SSE: Unauthorized
+2026-01-10 20:08:57.944 [warning] Unauthorized error connecting to streamableHttp server, returning transport
+2026-01-10 20:08:57.944 [info] Successfully connected to streamableHttp server
+2026-01-10 20:08:57.944 [info] Storing streamableHttp client
+2026-01-10 20:08:57.944 [info] CreateClient completed, server stored: true
+2026-01-10 20:08:57.960 [info] Handling ListOfferings action, server stored: true
+2026-01-10 20:08:57.960 [info] Connected to streamableHttp server, fetching offerings
+2026-01-10 20:08:57.960 [info] Found 0 tools, 0 prompts, and 0 resources
+2026-01-10 20:08:57.965 [info] Saving client information {"redirects":1,"clientIdPresent":true}
+2026-01-10 20:08:57.966 [info] Using redirect URL {"url":"cursor://anysphere.cursor-mcp/oauth/callback"}
+2026-01-10 20:08:57.966 [info] No stored tokens found
+2026-01-10 20:08:57.967 [info] Using redirect URL {"url":"cursor://anysphere.cursor-mcp/oauth/callback"}
+2026-01-10 20:08:57.967 [info] Saving PKCE code verifier {"verifierLen":43}
+2026-01-10 20:08:57.969 [info] Redirect to authorization requested {"url":"https://www.figma.com/oauth/mcp?response_type=code&client_id=NbPICMqHskmtxFcZpjkGi2&code_challenge=OVsIfahYdN1uLp3jqtCpviTL78xn7piSu8MRiqag6zY&code_challenge_method=S256&redirect_uri=cursor%3A%2F%2Fanysphere.cursor-mcp%2Foauth%2Fcallback&state=eyJpZCI6InVzZXItRmlnbWEifQ&scope=mcp%3Aconnect&resource=https%3A%2F%2Fmcp.figma.com%2Fmcp"}
+2026-01-10 20:08:57.970 [info] Stored server URL for OAuth flow
+2026-01-10 20:08:57.970 [info] OAuth provider needs auth callback during connection
+2026-01-10 20:08:57.970 [warning] Error connecting to streamableHttp server, falling back to SSE: Unauthorized
+2026-01-10 20:08:57.970 [warning] Unauthorized error connecting to streamableHttp server, returning transport
+2026-01-10 20:08:57.970 [info] Successfully connected to streamableHttp server
+2026-01-10 20:08:57.970 [info] A second client was created while connecting, discarding it.
+2026-01-10 20:08:57.970 [info] CreateClient completed, server stored: true
+2026-01-10 20:08:58.157 [info] Handling CreateClient action
+2026-01-10 20:08:58.157 [info] CreateClient completed, server stored: true

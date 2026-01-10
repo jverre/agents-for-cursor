@@ -17,7 +17,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
       }
 
       if (modelName.startsWith('acp:')) {
-        console.log('[ACP] 🎯 Intercepting message for ACP model:', modelName);
+        window.acpLog?.('INFO', '[ACP] 🎯 Intercepting message for ACP model:', modelName);
 
         try {
           if (!composerHandle) {
@@ -62,7 +62,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
           // Trigger slash command refresh in background
           if (window.acpSlashCommandIntegration) {
             window.acpSlashCommandIntegration.refreshCommands().catch(err =>
-              console.warn('[ACP] Failed to refresh slash commands:', err)
+              window.acpLog?.('WARN', '[ACP] Failed to refresh slash commands:', err)
             );
           }
 
@@ -129,61 +129,69 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                 const isNew = tc.sessionUpdate === 'tool_call';
                 const isComplete = tc.status === 'completed';
                 const isFailed = tc.status === 'failed';
-                const toolName = tc.kind || 'tool';
+                const isToolResult = tc.sessionUpdate === 'tool_result';
 
-                const TOOL_FORMER_CAPABILITY = 15;
-                const ACP_TOOL_TYPE = 90;
-                const READ_FILE_V2_TYPE = 40;
-
-                // Detect if this is a Read tool
-                const isReadTool = tc.kind === 'read';
-
-                // Get tool input - may be empty on first event, populated on subsequent
+                // Get tool input early for logging
                 const toolInput = tc.input || tc.rawInput || {};
                 const inputObj = typeof toolInput === 'string' ? (() => { try { return JSON.parse(toolInput); } catch { return {}; } })() : toolInput;
-                const hasInput = Object.keys(inputObj).length > 0;
 
-                // On first tool_call for this ID, create a tool bubble
-                // For Read tools: wait for file_path before creating (skip empty first event)
-                if (isNew && !s.toolBubbles.has(toolCallId)) {
-                  // For Read tools without file_path, skip creation - wait for second event
-                  if (isReadTool && !inputObj.file_path) {
-                    alert('[ACP-READ] Skipping empty first event, waiting for file path');
+                // DEBUG: Log all tool calls with full details including content
+                window.acpLog?.('DEBUG', '[ACP] onToolCall FULL:', JSON.stringify({
+                  kind: tc.kind,
+                  title: tc.title,
+                  sessionUpdate: tc.sessionUpdate,
+                  status: tc.status,
+                  toolCallId: toolCallId,
+                  inputKeys: Object.keys(inputObj),
+                  hasOldString: !!inputObj.old_string,
+                  hasNewString: !!inputObj.new_string,
+                  hasFilePath: !!inputObj.file_path,
+                  hasCommand: !!inputObj.command,
+                  contentTypes: tc.content ? tc.content.map(c => c.type) : null,
+                  contentDetails: tc.content ? tc.content.map(c => ({
+                    type: c.type,
+                    hasOldText: c.type === 'diff' ? !!c.oldText : undefined,
+                    hasNewText: c.type === 'diff' ? !!c.newText : undefined,
+                    path: c.path
+                  })) : null
+                }, null, 2));
+
+                const TOOL_FORMER_CAPABILITY = 15;
+                const READ_FILE_V2_TYPE = 40;
+                const RUN_TERMINAL_COMMAND_V2_TYPE = 15;
+                const SEARCH_REPLACE_TYPE = 38;
+
+                // Detect tool type (use stored type for updates, or detect from event)
+                const storedType = s.toolTypes?.get(toolCallId);
+                const isReadTool = tc.kind === 'read' || storedType?.isRead;
+                const isBashTool = tc.kind === 'execute' || storedType?.isBash;
+                const isEditTool = tc.kind === 'edit' || storedType?.isEdit;
+
+                // ===== READ TOOL (WORKING) =====
+                if (isReadTool) {
+                  if (isNew && !s.toolBubbles.has(toolCallId) && !inputObj.file_path) {
                     return;
                   }
 
-                  s.bubbleId = null;
-                  s.text = '';
+                  if (isNew && !s.toolBubbles.has(toolCallId)) {
+                    s.bubbleId = null;
+                    s.text = '';
 
-                  // Create a single formatted text bubble for the tool call
-                  const toolBubbleId = gen();
-                  s.toolBubbles.set(toolCallId, toolBubbleId);
+                    const toolBubbleId = gen();
+                    s.toolBubbles.set(toolCallId, toolBubbleId);
 
-                  // Track tool type for completion handling
-                  if (!s.toolTypes) s.toolTypes = new Map();
-                  s.toolTypes.set(toolCallId, { isRead: isReadTool });
+                    if (!s.toolTypes) s.toolTypes = new Map();
+                    s.toolTypes.set(toolCallId, { isRead: true });
 
-                  // Transform tool data based on kind
-                  let toolData;
-                  if (isReadTool) {
-                    // Map to Cursor's READ_FILE_V2 format (type 40)
-                    // Note: ACP sends 2 tool_call events - first with empty rawInput, second with file_path
                     const filePath = inputObj.file_path || '';
-
-                    alert('[ACP-READ] Creating bubble\nFile path: ' + (filePath || '(empty)') + '\ninputObj: ' + JSON.stringify(inputObj));
-
-                    // Always create type 40 for Read tools, even if file path is empty initially
-                    // It will be updated when the second tool_call event arrives with the file path
                     const cursorRawArgs = filePath ? {
                       target_file: filePath,
                       limit: inputObj.limit,
                       offset: inputObj.offset
                     } : {};
-
-                    // Proper URI format: file:// + /path = file:///path (three slashes total)
                     const effectiveUri = filePath ? ('file://' + filePath) : '';
 
-                    toolData = {
+                    const toolData = {
                       tool: READ_FILE_V2_TYPE,
                       toolCallId: toolCallId,
                       status: 'loading',
@@ -198,135 +206,353 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                       result: null
                     };
 
-                    alert('[ACP-READ] Created bubble (type 40)\ntargetFile: ' + (filePath || '(empty)') + '\neffectiveUri: ' + (effectiveUri || '(empty)'));
-                  } else {
-                    // Default ACP tool rendering (type 90)
-                    toolData = {
-                      tool: ACP_TOOL_TYPE,
-                      toolCallId: toolCallId,
-                      status: 'loading',
-                      name: toolName,
-                      rawArgs: JSON.stringify(inputObj),
-                      result: null
+                    const toolBubble = {
+                      bubbleId: toolBubbleId,
+                      type: 2,
+                      text: '',
+                      richText: '',
+                      codeBlocks: [],
+                      createdAt: new Date().toISOString(),
+                      capabilityType: TOOL_FORMER_CAPABILITY,
+                      toolFormerData: toolData
                     };
-                  }
 
-                  // ACP Tool Bubble - simplified structure
-                  // toolFormerData fields: tool, status, name, rawArgs (input JSON), result (output JSON)
-                  const toolBubble = {
-                    bubbleId: toolBubbleId,
-                    type: 2,
-                    text: '',
-                    richText: '',
-                    codeBlocks: [],
-                    createdAt: new Date().toISOString(),
-                    capabilityType: TOOL_FORMER_CAPABILITY,
-                    toolFormerData: toolData
-                  };
-
-                  try {
                     svc.appendComposerBubbles(composerHandle, [toolBubble]);
                     svc.updateComposerDataSetStore({{e}}, u => {
                       u("generatingBubbleIds", [toolBubbleId]);
                       u("currentBubbleId", toolBubbleId);
                     });
-                  } catch (err) {
-                    console.error('[ACP] Tool bubble create failed:', err);
                   }
-                }
 
-                // Update rawArgs when we receive input data (second tool_call event)
-                if (isNew && s.toolBubbles.has(toolCallId) && hasInput) {
-                  const toolBubbleId = s.toolBubbles.get(toolCallId);
+                  if (isComplete || isFailed || isToolResult) {
+                    const toolBubbleId = s.toolBubbles.get(toolCallId);
+                    if (toolBubbleId) {
+                      const finalStatus = isFailed ? 'error' : 'completed';
+                      let output = '';
 
-                  // For Read tools, we need to update params too (not just rawArgs)
-                  if (isReadTool && inputObj.file_path) {
-                    const filePath = inputObj.file_path;
-                    const cursorRawArgs = {
-                      target_file: filePath,
-                      limit: inputObj.limit,
-                      offset: inputObj.offset
-                    };
-                    // Proper URI format: file:// + /path = file:///path (three slashes total)
-                    const effectiveUri = 'file://' + filePath;
-
-                    alert('[ACP-READ] Updating with file path\nFile: ' + filePath + '\neffectiveUri: ' + effectiveUri);
-
-                    svc.updateComposerDataSetStore({{e}}, u => {
-                      u("conversationMap", toolBubbleId, "toolFormerData", "rawArgs", cursorRawArgs);
-                      u("conversationMap", toolBubbleId, "toolFormerData", "params", {
-                        targetFile: filePath,
-                        effectiveUri: effectiveUri,
-                        limit: inputObj.limit || 1000,
-                        charsLimit: 100000
-                      });
-                    });
-                  } else {
-                    svc.updateComposerDataSetStore({{e}}, u => {
-                      u("conversationMap", toolBubbleId, "toolFormerData", "rawArgs", JSON.stringify(inputObj));
-                    });
-                  }
-                }
-
-                // Check for tool_result event as completion indicator
-                const isToolResult = tc.sessionUpdate === 'tool_result';
-
-                // Update tool bubble on completion
-                if (isComplete || isFailed || isToolResult) {
-                  const toolBubbleId = s.toolBubbles.get(toolCallId);
-                  if (toolBubbleId) {
-                    const finalStatus = isFailed ? 'error' : 'completed';
-
-                    alert('[ACP-READ] Completion event\nstatus: ' + finalStatus + '\nhas content: ' + !!tc.content + '\nhas result: ' + !!tc.result);
-
-                    // Extract output from ACP response
-                    let output = '';
-                    if (Array.isArray(tc.result)) {
-                      output = tc.result.map(r => r.text || '').join('');
-                    } else if (typeof tc.result === 'string') {
-                      output = tc.result;
-                    } else if (tc.content && Array.isArray(tc.content)) {
-                      // Extract from ACP content array format: content[0].content.text
-                      const textContent = tc.content.find(c => c.type === 'content');
-                      if (textContent?.content?.text) {
-                        output = textContent.content.text;
-                        // ACP wraps file content in markdown code blocks (```), unwrap them
-                        const match = output.match(/^```+\n([\s\S]*?)\n```+$/);
-                        if (match) {
-                          output = match[1];
+                      if (Array.isArray(tc.result)) {
+                        output = tc.result.map(r => r.text || '').join('');
+                      } else if (typeof tc.result === 'string') {
+                        output = tc.result;
+                      } else if (tc.content && Array.isArray(tc.content)) {
+                        const textContent = tc.content.find(c => c.type === 'content');
+                        if (textContent?.content?.text) {
+                          output = textContent.content.text;
+                          const match = output.match(/^```+\n([\s\S]*?)\n```+$/);
+                          if (match) {
+                            output = match[1];
+                          }
+                        } else {
+                          output = typeof tc.content === 'string' ? tc.content : JSON.stringify(tc.content);
                         }
-                      } else {
+                      } else if (tc.content) {
                         output = typeof tc.content === 'string' ? tc.content : JSON.stringify(tc.content);
+                      } else if (isFailed) {
+                        output = 'Tool execution failed';
                       }
-                    } else if (tc.content) {
-                      output = typeof tc.content === 'string' ? tc.content : JSON.stringify(tc.content);
-                    } else if (isFailed) {
-                      output = 'Tool execution failed';
-                    }
 
-                    // Transform result for Read tools to Cursor format
-                    // Check stored tool type since tc.kind may not be in update event
-                    const toolType = s.toolTypes?.get(toolCallId);
-                    const wasReadTool = toolType?.isRead || tc.kind === 'read';
-
-                    alert('[ACP-READ] Extracted output\nLength: ' + output.length + '\nFirst 100 chars: ' + output.slice(0, 100) + '\nWas Read tool: ' + wasReadTool);
-
-                    let finalResult = output;
-                    if (wasReadTool && output) {
                       const lines = output.split('\n');
-                      finalResult = {
+                      const finalResult = {
                         contents: output,
                         numCharactersInRequestedRange: output.length,
                         totalLinesInFile: lines.length
                       };
-                      alert('[ACP-READ] Transformed result\nLines: ' + lines.length + '\nChars: ' + output.length + '\nResult is object: ' + (typeof finalResult === 'object'));
-                    }
 
+                      svc.updateComposerDataSetStore({{e}}, u => {
+                        u("conversationMap", toolBubbleId, "toolFormerData", "status", finalStatus);
+                        u("conversationMap", toolBubbleId, "toolFormerData", "result", finalResult);
+                      });
+                    }
+                  }
+                  return;
+                }
+
+                // ===== BASH TOOL (FULLY WORKING) =====
+                if (isBashTool) {
+                  if (isNew && !s.toolBubbles.has(toolCallId) && !inputObj.command) {
+                    return;
+                  }
+
+                  if (isNew && !s.toolBubbles.has(toolCallId)) {
+                    s.bubbleId = null;
+                    s.text = '';
+
+                    const toolBubbleId = gen();
+                    s.toolBubbles.set(toolCallId, toolBubbleId);
+
+                    if (!s.toolTypes) s.toolTypes = new Map();
+                    s.toolTypes.set(toolCallId, { isBash: true });
+
+                    // EXTRACT REAL COMMAND from ACP
+                    const realCommand = inputObj.command || 'unknown command';
+                    const workingDir = inputObj.working_directory || '/Users/jacquesverre/Documents/code/opencursor';
+
+                    // Parse command to get executable name and args (simple split on spaces)
+                    const cmdParts = realCommand.split(/\s+/);
+                    const execName = cmdParts[0] || 'unknown';
+                    const execArgs = cmdParts.slice(1).map(arg => ({ type: 'word', value: arg }));
+
+                    const toolData = {
+                      tool: RUN_TERMINAL_COMMAND_V2_TYPE,
+                      toolCallId: toolCallId,
+                      status: 'loading',
+                      name: 'run_terminal_command',
+                      params: {
+                        command: realCommand,
+                        requireUserApproval: false,
+                        workingDirectory: workingDir,
+                        parsingResult: {
+                          executableCommands: [
+                            {
+                              name: execName,
+                              args: execArgs,
+                              fullText: realCommand
+                            }
+                          ]
+                        },
+                        requestedSandboxPolicy: {
+                          type: 'TYPE_INSECURE_NONE',
+                          networkAccess: true,
+                          blockGitWrites: false
+                        }
+                      },
+                      rawArgs: {
+                        command: realCommand,
+                        is_background: false,
+                        required_permissions: ['all']
+                      },
+                      additionalData: {
+                        status: 'loading'
+                      },
+                      result: null
+                    };
+
+                    const toolBubble = {
+                      bubbleId: toolBubbleId,
+                      type: 2,
+                      text: '',
+                      richText: '',
+                      codeBlocks: [],
+                      createdAt: new Date().toISOString(),
+                      capabilityType: TOOL_FORMER_CAPABILITY,
+                      toolFormerData: toolData
+                    };
+
+                    svc.appendComposerBubbles(composerHandle, [toolBubble]);
                     svc.updateComposerDataSetStore({{e}}, u => {
-                      u("conversationMap", toolBubbleId, "toolFormerData", "status", finalStatus);
-                      u("conversationMap", toolBubbleId, "toolFormerData", "result", finalResult);
+                      u("generatingBubbleIds", [toolBubbleId]);
+                      u("currentBubbleId", toolBubbleId);
                     });
                   }
+
+                  // Extract and apply output immediately from toolResponse (event 4)
+                  if (tc._meta?.claudeCode?.toolResponse) {
+                    const toolBubbleId = s.toolBubbles.get(toolCallId);
+                    if (toolBubbleId) {
+                      const toolResponse = tc._meta.claudeCode.toolResponse[0];
+                      if (toolResponse?.type === 'text' && toolResponse?.text) {
+                        let output = toolResponse.text;
+                        // Parse "New output:\n\ntest\n" -> "test"
+                        const match = output.match(/New output:\n\n([\s\S]*)/);
+                        if (match) {
+                          output = match[1];
+                        }
+
+                        // Apply result immediately
+                        const result = {
+                          output: output,
+                          exitCodeV2: 0,
+                          rejected: false,
+                          notInterrupted: true,
+                          endedReason: 'RUN_TERMINAL_COMMAND_ENDED_REASON_EXECUTION_COMPLETED',
+                          effectiveSandboxPolicy: {
+                            type: 'TYPE_INSECURE_NONE'
+                          }
+                        };
+
+                        svc.updateComposerDataSetStore({{e}}, u => {
+                          u("conversationMap", toolBubbleId, "toolFormerData", "result", result);
+                          u("conversationMap", toolBubbleId, "toolFormerData", "additionalData", "status", "success");
+                        });
+                      }
+                    }
+                  }
+
+                  // Handle completion status (event 5)
+                  if (isComplete || isFailed) {
+                    const toolBubbleId = s.toolBubbles.get(toolCallId);
+                    if (toolBubbleId) {
+                      const finalStatus = isFailed ? 'error' : 'completed';
+                      svc.updateComposerDataSetStore({{e}}, u => {
+                        u("conversationMap", toolBubbleId, "toolFormerData", "status", finalStatus);
+                        u("conversationMap", toolBubbleId, "toolFormerData", "additionalData", "status", finalStatus === 'completed' ? 'success' : 'error');
+                      });
+                    }
+                  }
+
+                  return;
+                }
+
+                // ===== EDIT TOOL (edit_file_v2) =====
+                if (isEditTool) {
+                  // Skip if no file_path yet (initial pending event)
+                  if (isNew && !s.toolBubbles.has(toolCallId) && !inputObj.file_path) {
+                    return;
+                  }
+
+                  // Store edit data when we receive it (on the second tool_call with full data)
+                  if (isNew && inputObj.file_path) {
+                    // Save the edit data for later use on completion
+                    if (!s.editData) s.editData = new Map();
+                    
+                    // Find diff content from tc.content array
+                    const diffContent = tc.content?.find(c => c.type === 'diff');
+                    
+                    s.editData.set(toolCallId, {
+                      filePath: inputObj.file_path,
+                      oldString: inputObj.old_string || '',
+                      newString: inputObj.new_string || '',
+                      oldText: diffContent?.oldText || null,
+                      newText: diffContent?.newText || null
+                    });
+                    
+                    window.acpLog?.('DEBUG', '[ACP] Stored edit data for', toolCallId, 
+                      'filePath:', inputObj.file_path,
+                      'oldString len:', inputObj.old_string?.length || 0,
+                      'newString len:', inputObj.new_string?.length || 0,
+                      'diffOldText:', !!diffContent?.oldText,
+                      'diffNewText:', !!diffContent?.newText);
+                  }
+
+                  if (isNew && !s.toolBubbles.has(toolCallId)) {
+                    s.bubbleId = null;
+                    s.text = '';
+
+                    const toolBubbleId = gen();
+                    s.toolBubbles.set(toolCallId, toolBubbleId);
+
+                    if (!s.toolTypes) s.toolTypes = new Map();
+                    s.toolTypes.set(toolCallId, { isEdit: true });
+
+                    // Get file path from ACP data
+                    const filePath = inputObj.file_path || '';
+
+                    window.acpLog?.('DEBUG', '[ACP] Edit creating bubble - filePath:', filePath);
+
+                    // Match Cursor's expected format for edit_file_v2
+                    const toolData = {
+                      tool: 38,
+                      toolCallId: toolCallId,
+                      toolIndex: 0,
+                      modelCallId: "",
+                      status: 'loading',
+                      name: 'edit_file_v2',
+                      params: {
+                        relativeWorkspacePath: filePath,
+                        shouldSendBackLinterErrors: false,
+                        resultForModel: "",
+                        noCodeblock: true,
+                        cloudAgentEdit: false
+                      },
+                      additionalData: {}
+                    };
+
+                    const toolBubble = {
+                      bubbleId: toolBubbleId,
+                      type: 2,
+                      text: '',
+                      richText: '',
+                      codeBlocks: [],
+                      createdAt: new Date().toISOString(),
+                      capabilityType: TOOL_FORMER_CAPABILITY,
+                      toolFormerData: toolData
+                    };
+
+                    svc.appendComposerBubbles(composerHandle, [toolBubble]);
+                    svc.updateComposerDataSetStore({{e}}, u => {
+                      u("generatingBubbleIds", [toolBubbleId]);
+                      u("currentBubbleId", toolBubbleId);
+                    });
+                  }
+
+                  // Handle completion status - use stored edit data
+                  if (isComplete || isFailed) {
+                    const toolBubbleId = s.toolBubbles.get(toolCallId);
+                    const editData = s.editData?.get(toolCallId);
+                    
+                    window.acpLog?.('DEBUG', '[ACP] Edit completion - toolBubbleId:', !!toolBubbleId, 'editData:', !!editData);
+                    
+                    if (toolBubbleId && editData) {
+                      const finalStatus = isFailed ? 'error' : 'completed';
+
+                      // Use diff content if available, otherwise construct from old/new strings
+                      let beforeContent = editData.oldText;
+                      let afterContent = editData.newText;
+                      
+                      // If we don't have full file content from diff, we can't show proper diff
+                      // The oldText/newText from ACP diff content should be the full file
+                      if (!beforeContent || !afterContent) {
+                        window.acpLog?.('WARN', '[ACP] No diff content available, using input strings as fallback');
+                        beforeContent = editData.oldString || '';
+                        afterContent = editData.newString || '';
+                      }
+
+                      window.acpLog?.('DEBUG', '[ACP] Edit content lengths - Before:', beforeContent?.length || 0, 'After:', afterContent?.length || 0);
+
+                      // Simple hash function (matches Cursor's E9 hash)
+                      const hashContent = async (content) => {
+                        const encoder = new TextEncoder();
+                        const data = encoder.encode(content);
+                        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+                        const hashArray = Array.from(new Uint8Array(hashBuffer));
+                        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+                      };
+
+                      // Generate IDs and store content
+                      (async () => {
+                        const beforeHash = await hashContent(beforeContent);
+                        const afterHash = await hashContent(afterContent);
+                        const beforeContentId = `composer.content.${beforeHash}`;
+                        const afterContentId = `composer.content.${afterHash}`;
+
+                        // Store content in cursorDiskKV using Cursor's storage service
+                        try {
+                          const storageService = svc._storageService;
+
+                          if (storageService && typeof storageService.cursorDiskKVSet === 'function') {
+                            await storageService.cursorDiskKVSet(beforeContentId, beforeContent);
+                            await storageService.cursorDiskKVSet(afterContentId, afterContent);
+
+                            window.acpLog?.('DEBUG', '[ACP] Stored content - Before ID:', beforeContentId.substring(0, 60), 'After ID:', afterContentId.substring(0, 60));
+                          } else {
+                            window.acpLog?.('WARN', '[ACP] Storage service not found on svc._storageService');
+                          }
+                        } catch (err) {
+                          window.acpLog?.('ERROR', '[ACP] Failed to store:', err.message);
+                        }
+
+                        // Match Cursor's expected result format
+                        const result = {
+                          fileWasCreated: false,
+                          linterErrors: [],
+                          sentBackLinterErrors: false,
+                          shouldAutoFixLints: false,
+                          resultForModel: "",
+                          beforeContentId: beforeContentId,
+                          afterContentId: afterContentId
+                        };
+
+                        svc.updateComposerDataSetStore({{e}}, u => {
+                          u("conversationMap", toolBubbleId, "toolFormerData", "status", finalStatus);
+                          u("conversationMap", toolBubbleId, "toolFormerData", "result", result);
+                        });
+
+                        window.acpLog?.('DEBUG', '[ACP] Result set with IDs - beforeContentId:', beforeContentId, 'afterContentId:', afterContentId);
+                      })();
+                    }
+                  }
+
+                  return;
                 }
               }
             }
@@ -336,21 +562,21 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
             throw new Error(acpResponse.message || 'ACP error');
           }
 
-          console.log('[ACP] Response complete');
+          window.acpLog?.('INFO', '[ACP] Response complete');
           this._composerDataService.updateComposerDataSetStore({{e}}, o => {
             o("status", "completed");
             o("generatingBubbleIds", []);
             o("chatGenerationUUID", void 0);
           });
 
-          console.log('[ACP] Message completed successfully');
+          window.acpLog?.('INFO', '[ACP] Message completed successfully');
           return;
 
         } catch (acpError) {
-          console.error('[ACP] ❌ Error:', acpError);
+          window.acpLog?.('ERROR', '[ACP] ❌ Error:', acpError);
           this._composerDataService.updateComposerDataSetStore({{e}}, o => o("status", "aborted"));
           throw acpError;
         }
       }
 
-      console.log('[ACP] 🔵 Normal Cursor model, using standard flow:', modelName);
+      window.acpLog?.('INFO', '[ACP] 🔵 Normal Cursor model, using standard flow:', modelName);

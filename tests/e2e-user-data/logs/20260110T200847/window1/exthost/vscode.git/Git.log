@@ -1,0 +1,105 @@
+2026-01-10 20:08:51.956 [info] [main] Log level: Info
+2026-01-10 20:08:52.088 [info] [main] Validating found git in: "/usr/bin/git"
+2026-01-10 20:08:52.192 [info] [main] Using git "2.39.5 (Apple Git-154)" from "/usr/bin/git"
+2026-01-10 20:08:52.192 [info] [Model][doInitialScan] Initial repository scan started
+2026-01-10 20:08:52.332 [info] > git rev-parse --show-toplevel [134ms] (getRepositoryRoot)
+2026-01-10 20:08:52.484 [info] > git config --get remote.origin.url [154ms] 
+2026-01-10 20:08:52.513 [info] > git rev-parse --show-toplevel [37ms] (findGitRoot)
+2026-01-10 20:08:52.521 [info] > git rev-parse --show-toplevel [41ms] (findGitRoot)
+2026-01-10 20:08:52.569 [info] > git rev-parse --git-dir --git-common-dir --show-superproject-working-tree [85ms] 
+2026-01-10 20:08:52.573 [info] [Model][openRepository] Opened repository: /Users/jacquesverre/Documents/code/opencursor
+2026-01-10 20:08:52.573 [info] [Model][openRepository] Opened repository (kind): repository
+2026-01-10 20:08:52.575 [info] [Model][doInitialScan] Initial repository scan completed - repositories (1), closed repositories (0), parent repositories (0), unsafe repositories (0)
+2026-01-10 20:08:52.727 [info] > git config --get commit.template [146ms] 
+2026-01-10 20:08:52.746 [info] > git symbolic-ref --short refs/remotes/origin/HEAD [168ms] 
+2026-01-10 20:08:52.746 [info] fatal: ref refs/remotes/origin/HEAD is not a symbolic ref
+2026-01-10 20:08:52.746 [info] > git rev-parse --show-toplevel [179ms] 
+2026-01-10 20:08:52.746 [info] > git log --skip=0 --max-count=1 --pretty=format:%H [214ms] 
+2026-01-10 20:08:52.746 [info] > git rev-parse --abbrev-ref HEAD [210ms] (GitProvider.getCurrentBranch)
+2026-01-10 20:08:52.747 [info] > git symbolic-ref --short refs/remotes/origin/HEAD [213ms] 
+2026-01-10 20:08:52.747 [info] fatal: ref refs/remotes/origin/HEAD is not a symbolic ref
+2026-01-10 20:08:52.888 [info] > git symbolic-ref --short refs/remotes/origin/HEAD [159ms] 
+2026-01-10 20:08:52.888 [info] fatal: ref refs/remotes/origin/HEAD is not a symbolic ref
+2026-01-10 20:08:52.889 [info] > git rev-parse --abbrev-ref HEAD [163ms] (GitProvider.getCurrentBranch)
+2026-01-10 20:08:52.889 [info] > git rev-parse --show-toplevel [148ms] 
+2026-01-10 20:08:52.889 [info] > git rev-parse --verify origin/main [118ms] 
+2026-01-10 20:08:52.889 [info] > git rev-parse --abbrev-ref HEAD [144ms] (GitProvider.getCurrentBranch)
+2026-01-10 20:08:52.889 [info] > git rev-parse --show-toplevel [153ms] 
+2026-01-10 20:08:52.889 [info] > git rev-parse --show-toplevel [150ms] 
+2026-01-10 20:08:52.889 [info] > git rev-parse --verify origin/main [116ms] 
+2026-01-10 20:08:52.889 [info] > git rev-parse --show-toplevel [149ms] 
+2026-01-10 20:08:52.889 [info] > git rev-parse --show-toplevel [152ms] 
+2026-01-10 20:08:52.889 [info] > git rev-parse --show-toplevel [148ms] 
+2026-01-10 20:08:52.889 [info] > git rev-parse --abbrev-ref HEAD [144ms] (GitProvider.getCurrentBranch)
+2026-01-10 20:08:52.889 [info] > git rev-parse --show-toplevel [156ms] 
+2026-01-10 20:08:52.889 [info] > git rev-parse --show-toplevel [155ms] 
+2026-01-10 20:08:52.889 [info] > git symbolic-ref --short refs/remotes/origin/HEAD [159ms] 
+2026-01-10 20:08:52.889 [info] fatal: ref refs/remotes/origin/HEAD is not a symbolic ref
+2026-01-10 20:08:52.889 [info] > git rev-parse --show-toplevel [154ms] 
+2026-01-10 20:08:52.889 [info] > git rev-parse --show-toplevel [152ms] 
+2026-01-10 20:08:52.908 [info] > git for-each-ref --format=%(refname)%00%(upstream:short)%00%(objectname)%00%(upstream:track)%00%(upstream:remotename)%00%(upstream:remoteref) --ignore-case refs/heads/feat/acp-read-tool-rendering refs/remotes/feat/acp-read-tool-rendering [149ms] 
+2026-01-10 20:08:52.940 [info] > git rev-parse --verify origin/main [48ms] 
+2026-01-10 20:08:52.940 [info] > git rev-parse --verify origin/main [46ms] 
+2026-01-10 20:08:52.963 [info] > git status -z -uall [52ms]
+2026-01-10 20:08:52.970 [info] > git for-each-ref --sort -committerdate --format %(refname)%00%(objectname)%00%(*objectname) [56ms] 
+2026-01-10 20:08:53.028 [info] > git config --get commit.template [49ms] 
+2026-01-10 20:08:53.032 [info] > git rev-parse --abbrev-ref HEAD [51ms] (GitProvider.getCurrentBranch)
+2026-01-10 20:08:53.042 [info] > git for-each-ref --format=%(refname)%00%(upstream:short)%00%(objectname)%00%(upstream:track)%00%(upstream:remotename)%00%(upstream:remoteref) --ignore-case refs/heads/feat/acp-read-tool-rendering refs/remotes/feat/acp-read-tool-rendering [67ms] 
+2026-01-10 20:08:53.047 [info] > git for-each-ref --format=%(refname)%00%(upstream:short)%00%(objectname)%00%(upstream:track)%00%(upstream:remotename)%00%(upstream:remoteref) --ignore-case refs/heads/feat/acp-read-tool-rendering refs/remotes/feat/acp-read-tool-rendering [64ms] 
+2026-01-10 20:08:53.070 [info] > git config --get --local branch.feat/acp-read-tool-rendering.vscode-merge-base [27ms] 
+2026-01-10 20:08:53.119 [info] > git status -z -uall [70ms]
+2026-01-10 20:08:53.120 [info] > git for-each-ref --sort -committerdate --format %(refname)%00%(objectname)%00%(*objectname) [69ms] 
+2026-01-10 20:08:53.126 [info] > git for-each-ref --format=%(refname)%00%(upstream:short)%00%(objectname)%00%(upstream:track)%00%(upstream:remotename)%00%(upstream:remoteref) --ignore-case refs/heads/origin/main refs/remotes/origin/main [55ms] 
+2026-01-10 20:08:53.131 [info] > git check-ignore -v -z --stdin [38ms]
+2026-01-10 20:08:53.145 [info] > git merge-base refs/heads/feat/acp-read-tool-rendering refs/remotes/origin/feat/acp-read-tool-rendering [18ms] 
+2026-01-10 20:08:53.148 [info] > git for-each-ref --format=%(refname)%00%(upstream:short)%00%(objectname)%00%(upstream:track)%00%(upstream:remotename)%00%(upstream:remoteref) --ignore-case refs/heads/feat/acp-read-tool-rendering refs/remotes/feat/acp-read-tool-rendering [26ms] 
+2026-01-10 20:08:53.160 [info] > git config --get --local branch.feat/acp-read-tool-rendering.vscode-merge-base [11ms] 
+2026-01-10 20:08:53.161 [info] > git diff --name-status -z --diff-filter=ADMR b16421389eabd591fa519187f604d0bda2e44e53...refs/remotes/origin/feat/acp-read-tool-rendering [15ms] 
+2026-01-10 20:08:53.184 [info] > git for-each-ref --format=%(refname)%00%(upstream:short)%00%(objectname)%00%(upstream:track)%00%(upstream:remotename)%00%(upstream:remoteref) --ignore-case refs/heads/origin/main refs/remotes/origin/main [23ms] 
+2026-01-10 20:08:53.491 [info] > git rev-parse --show-toplevel [14ms] 
+2026-01-10 20:08:53.625 [warning] [Model][getRepositoryExact] Failed to get repository realpath for: "/Users/jacquesverre/Documents/code/opencursor-acp-session". Error:Error: ENOENT: no such file or directory, realpath '/Users/jacquesverre/Documents/code/opencursor-acp-session'
+2026-01-10 20:08:53.626 [warning] [Model][getRepositoryExact] Failed to get repository realpath for: "/Users/jacquesverre/Documents/code/opencursor-simplify-patcher". Error:Error: ENOENT: no such file or directory, realpath '/Users/jacquesverre/Documents/code/opencursor-simplify-patcher'
+2026-01-10 20:08:53.626 [warning] [Model][getRepositoryExact] Failed to get repository realpath for: "/Users/jacquesverre/Documents/code/opencursor-test-restructure". Error:Error: ENOENT: no such file or directory, realpath '/Users/jacquesverre/Documents/code/opencursor-test-restructure'
+2026-01-10 20:08:54.552 [info] > git config --get commit.template [17ms] 
+2026-01-10 20:08:54.558 [info] > git for-each-ref --format=%(refname)%00%(upstream:short)%00%(objectname)%00%(upstream:track)%00%(upstream:remotename)%00%(upstream:remoteref) --ignore-case refs/heads/feat/acp-read-tool-rendering refs/remotes/feat/acp-read-tool-rendering [22ms] 
+2026-01-10 20:08:54.584 [info] > git status -z -uall [25ms]
+2026-01-10 20:08:54.585 [info] > git for-each-ref --sort -committerdate --format %(refname)%00%(objectname)%00%(*objectname) [25ms] 
+2026-01-10 20:08:55.590 [warning] [Model][getRepositoryExact] Failed to get repository realpath for: "/Users/jacquesverre/Documents/code/opencursor-acp-session". Error:Error: ENOENT: no such file or directory, realpath '/Users/jacquesverre/Documents/code/opencursor-acp-session'
+2026-01-10 20:08:55.661 [warning] [Model][getRepositoryExact] Failed to get repository realpath for: "/Users/jacquesverre/Documents/code/opencursor-simplify-patcher". Error:Error: ENOENT: no such file or directory, realpath '/Users/jacquesverre/Documents/code/opencursor-simplify-patcher'
+2026-01-10 20:08:55.671 [warning] [Model][getRepositoryExact] Failed to get repository realpath for: "/Users/jacquesverre/Documents/code/opencursor-test-restructure". Error:Error: ENOENT: no such file or directory, realpath '/Users/jacquesverre/Documents/code/opencursor-test-restructure'
+2026-01-10 20:08:56.201 [info] > git remote get-url --push origin [80ms] 
+2026-01-10 20:08:59.605 [info] > git config --get commit.template [15ms] 
+2026-01-10 20:08:59.615 [info] > git for-each-ref --format=%(refname)%00%(upstream:short)%00%(objectname)%00%(upstream:track)%00%(upstream:remotename)%00%(upstream:remoteref) --ignore-case refs/heads/feat/acp-read-tool-rendering refs/remotes/feat/acp-read-tool-rendering [24ms] 
+2026-01-10 20:08:59.638 [info] > git for-each-ref --sort -committerdate --format %(refname)%00%(objectname)%00%(*objectname) [21ms] 
+2026-01-10 20:08:59.638 [info] > git status -z -uall [22ms]
+2026-01-10 20:08:59.657 [info] > git rev-parse --abbrev-ref HEAD [15ms] (GitProvider.getCurrentBranch)
+2026-01-10 20:09:00.141 [warning] [Model][getRepositoryExact] Failed to get repository realpath for: "/Users/jacquesverre/Documents/code/opencursor-acp-session". Error:Error: ENOENT: no such file or directory, realpath '/Users/jacquesverre/Documents/code/opencursor-acp-session'
+2026-01-10 20:09:00.142 [warning] [Model][getRepositoryExact] Failed to get repository realpath for: "/Users/jacquesverre/Documents/code/opencursor-simplify-patcher". Error:Error: ENOENT: no such file or directory, realpath '/Users/jacquesverre/Documents/code/opencursor-simplify-patcher'
+2026-01-10 20:09:00.143 [warning] [Model][getRepositoryExact] Failed to get repository realpath for: "/Users/jacquesverre/Documents/code/opencursor-test-restructure". Error:Error: ENOENT: no such file or directory, realpath '/Users/jacquesverre/Documents/code/opencursor-test-restructure'
+2026-01-10 20:09:00.155 [info] > git rev-parse --show-toplevel [12ms] 
+2026-01-10 20:09:02.208 [info] > git config --global user.name [18ms] 
+2026-01-10 20:09:02.224 [info] > git config --global user.email [15ms] 
+2026-01-10 20:09:02.224 [info] [main] Stored git author name in global state: Jacques Verre <jverre@gmail.com>
+2026-01-10 20:09:04.659 [info] > git config --get commit.template [16ms] 
+2026-01-10 20:09:04.664 [info] > git for-each-ref --format=%(refname)%00%(upstream:short)%00%(objectname)%00%(upstream:track)%00%(upstream:remotename)%00%(upstream:remoteref) --ignore-case refs/heads/feat/acp-read-tool-rendering refs/remotes/feat/acp-read-tool-rendering [18ms] 
+2026-01-10 20:09:04.692 [info] > git for-each-ref --sort -committerdate --format %(refname)%00%(objectname)%00%(*objectname) [25ms] 
+2026-01-10 20:09:04.693 [info] > git status -z -uall [27ms]
+2026-01-10 20:09:04.714 [info] > git rev-parse --abbrev-ref HEAD [16ms] (GitProvider.getCurrentBranch)
+2026-01-10 20:09:05.202 [warning] [Model][getRepositoryExact] Failed to get repository realpath for: "/Users/jacquesverre/Documents/code/opencursor-acp-session". Error:Error: ENOENT: no such file or directory, realpath '/Users/jacquesverre/Documents/code/opencursor-acp-session'
+2026-01-10 20:09:05.205 [warning] [Model][getRepositoryExact] Failed to get repository realpath for: "/Users/jacquesverre/Documents/code/opencursor-simplify-patcher". Error:Error: ENOENT: no such file or directory, realpath '/Users/jacquesverre/Documents/code/opencursor-simplify-patcher'
+2026-01-10 20:09:05.206 [warning] [Model][getRepositoryExact] Failed to get repository realpath for: "/Users/jacquesverre/Documents/code/opencursor-test-restructure". Error:Error: ENOENT: no such file or directory, realpath '/Users/jacquesverre/Documents/code/opencursor-test-restructure'
+2026-01-10 20:09:05.226 [info] > git rev-parse --show-toplevel [25ms] 
+2026-01-10 20:09:09.722 [info] > git config --get commit.template [19ms] 
+2026-01-10 20:09:09.729 [info] > git for-each-ref --format=%(refname)%00%(upstream:short)%00%(objectname)%00%(upstream:track)%00%(upstream:remotename)%00%(upstream:remoteref) --ignore-case refs/heads/feat/acp-read-tool-rendering refs/remotes/feat/acp-read-tool-rendering [22ms] 
+2026-01-10 20:09:09.753 [info] > git for-each-ref --sort -committerdate --format %(refname)%00%(objectname)%00%(*objectname) [22ms] 
+2026-01-10 20:09:09.754 [info] > git status -z -uall [24ms]
+2026-01-10 20:09:10.260 [warning] [Model][getRepositoryExact] Failed to get repository realpath for: "/Users/jacquesverre/Documents/code/opencursor-acp-session". Error:Error: ENOENT: no such file or directory, realpath '/Users/jacquesverre/Documents/code/opencursor-acp-session'
+2026-01-10 20:09:10.260 [warning] [Model][getRepositoryExact] Failed to get repository realpath for: "/Users/jacquesverre/Documents/code/opencursor-simplify-patcher". Error:Error: ENOENT: no such file or directory, realpath '/Users/jacquesverre/Documents/code/opencursor-simplify-patcher'
+2026-01-10 20:09:10.261 [warning] [Model][getRepositoryExact] Failed to get repository realpath for: "/Users/jacquesverre/Documents/code/opencursor-test-restructure". Error:Error: ENOENT: no such file or directory, realpath '/Users/jacquesverre/Documents/code/opencursor-test-restructure'
+2026-01-10 20:09:14.773 [info] > git config --get commit.template [15ms] 
+2026-01-10 20:09:14.778 [info] > git for-each-ref --format=%(refname)%00%(upstream:short)%00%(objectname)%00%(upstream:track)%00%(upstream:remotename)%00%(upstream:remoteref) --ignore-case refs/heads/feat/acp-read-tool-rendering refs/remotes/feat/acp-read-tool-rendering [19ms] 
+2026-01-10 20:09:14.804 [info] > git for-each-ref --sort -committerdate --format %(refname)%00%(objectname)%00%(*objectname) [24ms] 
+2026-01-10 20:09:14.804 [info] > git status -z -uall [25ms]
+2026-01-10 20:09:15.305 [warning] [Model][getRepositoryExact] Failed to get repository realpath for: "/Users/jacquesverre/Documents/code/opencursor-acp-session". Error:Error: ENOENT: no such file or directory, realpath '/Users/jacquesverre/Documents/code/opencursor-acp-session'
+2026-01-10 20:09:15.306 [warning] [Model][getRepositoryExact] Failed to get repository realpath for: "/Users/jacquesverre/Documents/code/opencursor-simplify-patcher". Error:Error: ENOENT: no such file or directory, realpath '/Users/jacquesverre/Documents/code/opencursor-simplify-patcher'
+2026-01-10 20:09:15.306 [warning] [Model][getRepositoryExact] Failed to get repository realpath for: "/Users/jacquesverre/Documents/code/opencursor-test-restructure". Error:Error: ENOENT: no such file or directory, realpath '/Users/jacquesverre/Documents/code/opencursor-test-restructure'

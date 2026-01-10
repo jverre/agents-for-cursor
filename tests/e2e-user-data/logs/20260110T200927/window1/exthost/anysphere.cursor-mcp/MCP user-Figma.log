@@ -1,0 +1,27 @@
+2026-01-10 20:09:35.197 [info] Handling CreateClient action
+2026-01-10 20:09:35.197 [info] Creating streamableHttp transport
+2026-01-10 20:09:35.197 [info] Handling CreateClient action
+2026-01-10 20:09:35.197 [info] CreateClient already in progress, waiting for existing creation
+2026-01-10 20:09:35.197 [info] Handling CreateClient action
+2026-01-10 20:09:35.197 [info] CreateClient already in progress, waiting for existing creation
+2026-01-10 20:09:35.757 [info] Using OAuth scopes: mcp:connect
+2026-01-10 20:09:35.757 [info] Connecting to streamableHttp server
+2026-01-10 20:09:35.758 [info] No stored tokens found
+2026-01-10 20:09:36.138 [info] Handling ListOfferings action, server stored: false
+2026-01-10 20:09:36.138 [info] Server creation in progress, waiting for completion
+2026-01-10 20:09:36.950 [info] Using redirect URL {"url":"cursor://anysphere.cursor-mcp/oauth/callback"}
+2026-01-10 20:09:36.950 [info] No stored tokens found
+2026-01-10 20:09:36.951 [info] Using redirect URL {"url":"cursor://anysphere.cursor-mcp/oauth/callback"}
+2026-01-10 20:09:36.951 [info] Saving PKCE code verifier {"verifierLen":43}
+2026-01-10 20:09:36.953 [info] Redirect to authorization requested {"url":"https://www.figma.com/oauth/mcp?response_type=code&client_id=NbPICMqHskmtxFcZpjkGi2&code_challenge=TM7d0QmVoDjbiW3fzs6m7WFKWOiBa7TtJH-ROGeK6PA&code_challenge_method=S256&redirect_uri=cursor%3A%2F%2Fanysphere.cursor-mcp%2Foauth%2Fcallback&state=eyJpZCI6InVzZXItRmlnbWEifQ&scope=mcp%3Aconnect&resource=https%3A%2F%2Fmcp.figma.com%2Fmcp"}
+2026-01-10 20:09:36.954 [info] Stored server URL for OAuth flow
+2026-01-10 20:09:36.954 [info] OAuth provider needs auth callback during connection
+2026-01-10 20:09:36.955 [warning] Error connecting to streamableHttp server, falling back to SSE: Unauthorized
+2026-01-10 20:09:36.955 [warning] Unauthorized error connecting to streamableHttp server, returning transport
+2026-01-10 20:09:36.955 [info] Successfully connected to streamableHttp server
+2026-01-10 20:09:36.955 [info] Storing streamableHttp client
+2026-01-10 20:09:36.955 [info] CreateClient completed, server stored: true
+2026-01-10 20:09:36.955 [info] CreateClient completed (from existing), server stored: true
+2026-01-10 20:09:36.955 [info] CreateClient completed (from existing), server stored: true
+2026-01-10 20:09:36.955 [info] Connected to streamableHttp server, fetching offerings
+2026-01-10 20:09:36.955 [info] Found 0 tools, 0 prompts, and 0 resources

@@ -3,6 +3,28 @@ const patcher = require('./patcher');
 const { spawn } = require('child_process');
 const { createInterface } = require('readline');
 const http = require('http');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
+// File-based logging for ACP - logs to ~/.cursor-acp.log
+const ACP_LOG_PATH = path.join(os.homedir(), '.cursor-acp.log');
+
+/**
+ * Log a message to the ACP log file and console
+ * @param {string} level - Log level: INFO, DEBUG, WARN, ERROR
+ * @param  {...any} args - Message parts to log
+ */
+function acpLog(level, ...args) {
+    const timestamp = new Date().toISOString();
+    const message = `[${timestamp}] [${level}] ${args.join(' ')}\n`;
+    try {
+        fs.appendFileSync(ACP_LOG_PATH, message);
+    } catch (e) {
+        // Ignore file write errors
+    }
+    console.log(`[ACP] ${args.join(' ')}`);
+}
 
 /**
  * Get the current workspace folder path
@@ -64,10 +86,10 @@ class ACPAgentManager {
                     const { resolve, reject, startTime, method } = agent.pendingRequests.get(message.id);
                     agent.pendingRequests.delete(message.id);
                     const elapsed = startTime ? Date.now() - startTime : 0;
-                    console.log('[ACP] 📩 Response received | id:', message.id, '| method:', method, '| elapsed:', elapsed, 'ms | error:', !!message.error);
+                    acpLog('INFO', '[ACP] 📩 Response received | id:', message.id, '| method:', method, '| elapsed:', elapsed, 'ms | error:', !!message.error);
 
                     if (message.error) {
-                        console.error('[ACP] ❌ Request error:', message.error.message || message.error);
+                        acpLog('ERROR', '[ACP] ❌ Request error:', message.error.message || message.error);
                         reject(new Error(message.error.message || 'ACP error'));
                     } else {
                         resolve(message.result);
@@ -76,7 +98,7 @@ class ACPAgentManager {
 
                 // Handle permission requests from agent - auto-approve all
                 if (message.method === 'session/request_permission' && message.id !== undefined) {
-                    console.log('[ACP] Auto-approving permission request:', message.params?.permission?.kind);
+                    acpLog('INFO', '[ACP] Auto-approving permission request:', message.params?.permission?.kind);
                     const response = {
                         jsonrpc: '2.0',
                         id: message.id,
@@ -89,7 +111,7 @@ class ACPAgentManager {
                 if (message.method === 'terminal/create' && message.id !== undefined) {
                     const { command, args, cwd } = message.params || {};
                     const terminalId = `term_${this.nextTerminalId++}`;
-                    console.log('[ACP] 🔧 Terminal CREATE:', terminalId, '| cmd:', command, args?.join(' ').slice(0, 50), '| cwd:', cwd?.slice(-30));
+                    acpLog('INFO', '[ACP] 🔧 Terminal CREATE:', terminalId, '| cmd:', command, args?.join(' ').slice(0, 50), '| cwd:', cwd?.slice(-30));
 
                     const cmdArgs = args || [];
                     const termProc = spawn(command, cmdArgs, {
@@ -109,15 +131,15 @@ class ACPAgentManager {
                     termProc.stdout.on('data', (data) => {
                         const chunk = data.toString();
                         terminal.output += chunk;
-                        console.log('[ACP] 📄 Terminal', terminalId, 'stdout:', chunk.length, 'bytes | total:', terminal.output.length);
+                        acpLog('INFO', '[ACP] 📄 Terminal', terminalId, 'stdout:', chunk.length, 'bytes | total:', terminal.output.length);
                     });
                     termProc.stderr.on('data', (data) => {
                         const chunk = data.toString();
                         terminal.output += chunk;
-                        console.log('[ACP] 📄 Terminal', terminalId, 'stderr:', chunk.length, 'bytes');
+                        acpLog('INFO', '[ACP] 📄 Terminal', terminalId, 'stderr:', chunk.length, 'bytes');
                     });
                     termProc.on('error', (err) => {
-                        console.error('[ACP] ❌ Terminal', terminalId, 'error:', err.message);
+                        acpLog('ERROR', '[ACP] ❌ Terminal', terminalId, 'error:', err.message);
                         terminal.exitCode = -1;
                         terminal.done = true;
                     });
@@ -125,7 +147,7 @@ class ACPAgentManager {
                         const elapsed = Date.now() - terminalStart;
                         terminal.exitCode = code;
                         terminal.done = true;
-                        console.log('[ACP] ✅ Terminal', terminalId, 'exited | code:', code, '| elapsed:', elapsed, 'ms | output:', terminal.output.length, 'bytes');
+                        acpLog('INFO', '[ACP] ✅ Terminal', terminalId, 'exited | code:', code, '| elapsed:', elapsed, 'ms | output:', terminal.output.length, 'bytes');
                     });
 
                     this.terminals.set(terminalId, terminal);
@@ -142,10 +164,10 @@ class ACPAgentManager {
                 if (message.method === 'terminal/wait_for_exit' && message.id !== undefined) {
                     const { terminalId } = message.params || {};
                     const terminal = this.terminals.get(terminalId);
-                    console.log('[ACP] ⏳ Terminal WAIT:', terminalId, '| done:', terminal?.done, '| exitCode:', terminal?.exitCode);
+                    acpLog('INFO', '[ACP] ⏳ Terminal WAIT:', terminalId, '| done:', terminal?.done, '| exitCode:', terminal?.exitCode);
 
                     const sendResult = () => {
-                        console.log('[ACP] ✅ Terminal WAIT complete:', terminalId, '| exitCode:', terminal?.exitCode ?? 0);
+                        acpLog('INFO', '[ACP] ✅ Terminal WAIT complete:', terminalId, '| exitCode:', terminal?.exitCode ?? 0);
                         const response = {
                             jsonrpc: '2.0',
                             id: message.id,
@@ -167,7 +189,7 @@ class ACPAgentManager {
                 if (message.method === 'terminal/output' && message.id !== undefined) {
                     const { terminalId } = message.params || {};
                     const terminal = this.terminals.get(terminalId);
-                    console.log('[ACP] 📤 Terminal OUTPUT:', terminalId, '| len:', terminal?.output?.length, '| exitCode:', terminal?.exitCode);
+                    acpLog('INFO', '[ACP] 📤 Terminal OUTPUT:', terminalId, '| len:', terminal?.output?.length, '| exitCode:', terminal?.exitCode);
 
                     const response = {
                         jsonrpc: '2.0',
@@ -183,7 +205,7 @@ class ACPAgentManager {
                 // Handle terminal/release - cleanup terminal
                 if (message.method === 'terminal/release' && message.id !== undefined) {
                     const { terminalId } = message.params || {};
-                    console.log('[ACP] Releasing terminal:', terminalId);
+                    acpLog('INFO', '[ACP] Releasing terminal:', terminalId);
 
                     const terminal = this.terminals.get(terminalId);
                     if (terminal?.process && !terminal.done) {
@@ -203,13 +225,13 @@ class ACPAgentManager {
                 if (message.method === 'session/update') {
                     const update = message.params?.update;
                     const sessionId = message.params?.sessionId;
-                    console.log('[ACP] session/update received:', update?.sessionUpdate, '| session:', sessionId?.slice(0, 8));
+                    acpLog('INFO', '[ACP] session/update received:', update?.sessionUpdate, '| session:', sessionId?.slice(0, 8));
 
                     // Handle available_commands_update - cache slash commands
                     if (update?.sessionUpdate === 'available_commands_update') {
                         agent.slashCommands = update.availableCommands || [];
                         this.slashCommands.set(agent.providerId, agent.slashCommands);
-                        console.log('[ACP] Received', agent.slashCommands.length, 'slash commands');
+                        acpLog('INFO', '[ACP] Received', agent.slashCommands.length, 'slash commands');
                     }
 
                     // Handle agent_message_chunk - extract text content
@@ -232,7 +254,7 @@ class ACPAgentManager {
 
                     // Log tool events for debugging
                     if (update?.sessionUpdate === 'tool_call' || update?.sessionUpdate === 'tool_call_update') {
-                        console.log('[ACP] Tool event:', update.sessionUpdate, '| id:', update.toolCallId?.slice(0, 8), '| status:', update.status, '| kind:', update.kind);
+                        acpLog('INFO', '[ACP] Tool event:', update.sessionUpdate, '| id:', update.toolCallId?.slice(0, 8), '| status:', update.status, '| kind:', update.kind);
                     }
 
                     // Forward to session-specific listener (routes by sessionId to avoid race conditions)
@@ -242,7 +264,7 @@ class ACPAgentManager {
                     }
                 }
             } catch (error) {
-                console.error('[ACP] Failed to parse message:', error);
+                acpLog('ERROR', '[ACP] Failed to parse message:', error);
             }
         });
 
@@ -281,7 +303,7 @@ class ACPAgentManager {
         return new Promise((resolve, reject) => {
             const id = this.nextMessageId++;
             const request = { jsonrpc: '2.0', id, method, params };
-            console.log('[ACP] 📨 Sending request:', method, '| id:', id, '| session:', params?.sessionId?.slice(0, 8) || '-');
+            acpLog('INFO', '[ACP] 📨 Sending request:', method, '| id:', id, '| session:', params?.sessionId?.slice(0, 8) || '-');
 
             const startTime = Date.now();
             agent.pendingRequests.set(id, { resolve, reject, startTime, method });
@@ -290,7 +312,7 @@ class ACPAgentManager {
             setTimeout(() => {
                 if (agent.pendingRequests.has(id)) {
                     const elapsed = Date.now() - startTime;
-                    console.error('[ACP] ⏰ Request TIMEOUT after', elapsed, 'ms | method:', method, '| id:', id);
+                    acpLog('ERROR', '[ACP] ⏰ Request TIMEOUT after', elapsed, 'ms | method:', method, '| id:', id);
                     agent.pendingRequests.delete(id);
                     reject(new Error('Request timeout'));
                 }
@@ -433,6 +455,23 @@ async function activate(context) {
             return;
         }
 
+        // POST /acp/log - receive logs from renderer context
+        if (req.method === 'POST' && req.url === '/acp/log') {
+            let body = '';
+            req.on('data', chunk => { body += chunk.toString(); });
+            req.on('end', () => {
+                try {
+                    const { level, message } = JSON.parse(body);
+                    acpLog(level || 'INFO', message);
+                } catch (e) {
+                    // Ignore parse errors
+                }
+                res.writeHead(200);
+                res.end('ok');
+            });
+            return;
+        }
+
         // GET /acp/debug - show debug notification
         if (req.method === 'GET' && req.url.startsWith('/acp/debug?')) {
             const url = new URL(req.url, 'http://localhost');
@@ -461,7 +500,7 @@ async function activate(context) {
             req.on('end', async () => {
                 try {
                     const { provider, composerId } = JSON.parse(body);
-                    console.log('[ACP] Getting session for composer:', composerId);
+                    acpLog('INFO', '[ACP] Getting session for composer:', composerId);
                     vscode.window.showInformationMessage(`[ACP] 1️⃣ getSession called`);
 
                     const agent = await agentManager.spawnAgent(provider);
@@ -469,7 +508,7 @@ async function activate(context) {
                     // Check if we already have a session for this composer
                     const existingSession = agentManager.sessions.get(composerId);
                     if (existingSession && existingSession.providerId === agent.providerId) {
-                        console.log('[ACP] Reusing existing session:', existingSession.sessionId);
+                        acpLog('INFO', '[ACP] Reusing existing session:', existingSession.sessionId);
                         res.writeHead(200, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ sessionId: existingSession.sessionId }));
                         return;
@@ -485,11 +524,11 @@ async function activate(context) {
                         providerId: agent.providerId
                     });
 
-                    console.log('[ACP] Created new session:', sessionResult.sessionId);
+                    acpLog('INFO', '[ACP] Created new session:', sessionResult.sessionId);
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ sessionId: sessionResult.sessionId }));
                 } catch (error) {
-                    console.error('[ACP] Error getting session:', error);
+                    acpLog('ERROR', '[ACP] Error getting session:', error);
                     res.writeHead(500, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ error: true, message: error.message }));
                 }
@@ -505,7 +544,7 @@ async function activate(context) {
             req.on('end', async () => {
                 try {
                     const { provider } = JSON.parse(body);
-                    console.log('[ACP] Initializing session for slash commands, provider:', provider.id);
+                    acpLog('INFO', '[ACP] Initializing session for slash commands, provider:', provider.id);
 
                     const agent = await agentManager.spawnAgent(provider);
 
@@ -515,13 +554,13 @@ async function activate(context) {
                         mcpServers: []
                     });
 
-                    console.log('[ACP] Session created:', sessionResult.sessionId);
+                    acpLog('INFO', '[ACP] Session created:', sessionResult.sessionId);
 
                     // Wait a bit for the agent to send available_commands_update
                     await new Promise(resolve => setTimeout(resolve, 500));
 
                     const commands = agentManager.slashCommands.get(provider.id) || [];
-                    console.log('[ACP] Slash commands after init:', commands.length);
+                    acpLog('INFO', '[ACP] Slash commands after init:', commands.length);
 
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({
@@ -529,7 +568,7 @@ async function activate(context) {
                         commands: commands
                     }));
                 } catch (error) {
-                    console.error('[ACP] Error initializing session:', error);
+                    acpLog('ERROR', '[ACP] Error initializing session:', error);
                     res.writeHead(500, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ error: true, message: error.message }));
                 }
@@ -650,7 +689,7 @@ async function activate(context) {
                         res.end(JSON.stringify(result));
                     }
                 } catch (error) {
-                    console.error('[ACP] Error:', error);
+                    acpLog('ERROR', '[ACP] Error:', error);
                     if (!res.headersSent) {
                         res.writeHead(500, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: true, message: error.message }));
@@ -752,7 +791,7 @@ async function activate(context) {
                 }
             };
         } catch (error) {
-            console.error('[ACP] Error:', error);
+            acpLog('ERROR', '[ACP] Error:', error);
             return { error: true, message: error.message };
         }
     });
@@ -833,3 +872,4 @@ module.exports = {
     activate,
     deactivate
 };
+//test
