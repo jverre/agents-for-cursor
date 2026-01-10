@@ -136,6 +136,70 @@ Gradually replace hardcoded values with actual ACP data, testing each change.
 
 **Golden rule: When something is wrong, add more logs first.** You can never have too many logs when debugging.
 
+## Debugging Tool Result Formats
+
+When tool bubbles render but show incorrect data (e.g., "No results found"):
+
+### 1. Search the workbench for protobuf definitions
+
+```bash
+# Find the class/message structure for your tool type
+grep -o 'RipgrepRawSearch[^}]*}' workbench.desktop.main.js | head -20
+
+# Look for field definitions
+grep -o 'filesWithMeta\|totalFiles\|workspaceResults' workbench.desktop.main.js | head -20
+```
+
+### 2. Find how results are consumed
+
+```bash
+# Search for where results are checked
+grep -o 'result?.case===[^}]*' workbench.desktop.main.js | head -10
+```
+
+### 3. Match the exact protobuf structure
+
+Cursor uses protobuf messages. The result object must match the exact structure:
+
+```javascript
+// WRONG - plain object
+{ success: { workspaceResults: {...} } }
+
+// CORRECT - matches protobuf RipgrepRawSearchResult
+{ 
+  result: { 
+    case: "success", 
+    value: { 
+      workspaceResults: {...} 
+    } 
+  } 
+}
+```
+
+### 4. For grep with match counts, use "count" case
+
+```javascript
+// "files" case - just file paths, no counts
+result: { case: "files", value: { files: ["path.js"], totalFiles: 1 } }
+
+// "count" case - file paths WITH match counts
+result: { 
+  case: "count", 
+  value: { 
+    counts: [{ file: "path.js", count: 5 }], 
+    totalFiles: 1, 
+    totalMatches: 5 
+  } 
+}
+```
+
+### 5. Verify with logs
+
+```bash
+# Check what format you're sending
+cat ~/.cursor-acp.log | grep -A 30 "Grep result object" | tail -35
+```
+
 ### Packaging the extension
 
 ```bash
