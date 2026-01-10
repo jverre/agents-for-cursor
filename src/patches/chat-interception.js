@@ -163,12 +163,16 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                 const GREP_TYPE = 41;
                 const GLOB_TYPE = 42;
                 const LIST_DIR_TYPE = 39;
+                const TASK_V2_TYPE = 48;
+                const TODO_WRITE_TYPE = 35;
 
                 // Detect tool type (use stored type for updates, or detect from event)
                 const storedType = s.toolTypes?.get(toolCallId);
                 const isReadTool = tc.kind === 'read' || storedType?.isRead;
                 const isBashTool = tc.kind === 'execute' || storedType?.isBash;
                 const isEditTool = tc.kind === 'edit' || storedType?.isEdit;
+                const isTaskTool = tc.kind === 'think' || storedType?.isTask;
+                const isTodoWriteTool = (tc.kind === 'think' && tc.title?.toLowerCase().includes('todo')) || storedType?.isTodoWrite;
                 
                 // Glob and LS detection - these come with kind: 'search' but have specific input fields
                 // Glob tool: kind is 'search' and title contains 'Find' (NOT grep/Grep)
@@ -1000,6 +1004,163 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
 
                       svc.updateComposerDataSetStore({{e}}, u => {
                         u("conversationMap", toolBubbleId, "toolFormerData", "status", listDirFinalStatus);
+                        u("conversationMap", toolBubbleId, "toolFormerData", "result", result);
+                      });
+                    }
+                  }
+
+                  return;
+                }
+
+                // ===== TASK TOOL (Type 48) =====
+                if (isTaskTool && !isTodoWriteTool) {
+                  // Create bubble on first tool_call
+                  if (isNew && !s.toolBubbles.has(toolCallId)) {
+                    const taskDescription = inputObj.description || inputObj.content || tc.title || 'Task';
+
+                    s.bubbleId = null;
+                    s.text = '';
+
+                    const toolBubbleId = gen();
+                    s.toolBubbles.set(toolCallId, toolBubbleId);
+
+                    if (!s.toolTypes) s.toolTypes = new Map();
+                    s.toolTypes.set(toolCallId, { isTask: true });
+
+                    // Store task input for later use
+                    if (!s.toolInputs) s.toolInputs = new Map();
+                    s.toolInputs.set(toolCallId, { description: taskDescription });
+
+                    // Create the tool bubble
+                    const rawArgs = { description: taskDescription };
+
+                    const toolBubble = {
+                      bubbleId: toolBubbleId,
+                      type: 2,
+                      text: '',
+                      richText: '',
+                      codeBlocks: [],
+                      createdAt: Date.now(),
+                      capabilityType: 'agentic'
+                    };
+
+                    window.acpLog?.('INFO', '[ACP] 💭 Creating TASK bubble:', toolCallId, taskDescription?.substring(0, 50));
+
+                    svc.appendComposerBubbles(composerHandle, [toolBubble]);
+
+                    svc.updateComposerDataSetStore({{e}}, u => {
+                      u("conversationMap", toolBubbleId, "toolFormerData", {
+                        type: TASK_V2_TYPE,
+                        tool: TASK_V2_TYPE,
+                        toolCallId: toolCallId,
+                        status: 'running',
+                        requestId: toolBubbleId,
+                        rawArgs: JSON.stringify(rawArgs),
+                        params: rawArgs
+                      });
+                    });
+                  }
+
+                  // Handle completion
+                  if (isComplete || isFailed) {
+                    const taskFinalStatus = isFailed ? 'error' : 'completed';
+                    const toolBubbleId = s.toolBubbles.get(toolCallId);
+
+                    if (toolBubbleId) {
+                      // Get task output
+                      let output = '';
+                      if (Array.isArray(tc.content)) {
+                        const textContent = tc.content.find(c => c.type === 'content');
+                        if (textContent?.content?.text) {
+                          output = textContent.content.text;
+                        }
+                      }
+
+                      const taskData = s.toolInputs?.get(toolCallId);
+
+                      window.acpLog?.('INFO', '[ACP] ✅ Task completed');
+
+                      // Build result - Task result is simple
+                      const result = {
+                        success: true,
+                        output: output
+                      };
+
+                      svc.updateComposerDataSetStore({{e}}, u => {
+                        u("conversationMap", toolBubbleId, "toolFormerData", "status", taskFinalStatus);
+                        u("conversationMap", toolBubbleId, "toolFormerData", "result", result);
+                      });
+                    }
+                  }
+
+                  return;
+                }
+
+                // ===== TODO_WRITE TOOL (Type 35) =====
+                if (isTodoWriteTool) {
+                  // Create bubble on first tool_call
+                  if (isNew && !s.toolBubbles.has(toolCallId)) {
+                    const todos = inputObj.todos || [];
+
+                    s.bubbleId = null;
+                    s.text = '';
+
+                    const toolBubbleId = gen();
+                    s.toolBubbles.set(toolCallId, toolBubbleId);
+
+                    if (!s.toolTypes) s.toolTypes = new Map();
+                    s.toolTypes.set(toolCallId, { isTodoWrite: true });
+
+                    // Store todos for later
+                    if (!s.toolInputs) s.toolInputs = new Map();
+                    s.toolInputs.set(toolCallId, { todos });
+
+                    // Create the tool bubble
+                    const rawArgs = { todos };
+
+                    const toolBubble = {
+                      bubbleId: toolBubbleId,
+                      type: 2,
+                      text: '',
+                      richText: '',
+                      codeBlocks: [],
+                      createdAt: Date.now(),
+                      capabilityType: 'agentic'
+                    };
+
+                    window.acpLog?.('INFO', '[ACP] 📝 Creating TODO_WRITE bubble:', toolCallId, 'todos count:', todos?.length);
+
+                    svc.appendComposerBubbles(composerHandle, [toolBubble]);
+
+                    svc.updateComposerDataSetStore({{e}}, u => {
+                      u("conversationMap", toolBubbleId, "toolFormerData", {
+                        type: TODO_WRITE_TYPE,
+                        tool: TODO_WRITE_TYPE,
+                        toolCallId: toolCallId,
+                        status: 'running',
+                        requestId: toolBubbleId,
+                        rawArgs: JSON.stringify(rawArgs),
+                        params: rawArgs
+                      });
+                    });
+                  }
+
+                  // Handle completion
+                  if (isComplete || isFailed) {
+                    const todoFinalStatus = isFailed ? 'error' : 'completed';
+                    const toolBubbleId = s.toolBubbles.get(toolCallId);
+
+                    if (toolBubbleId) {
+                      const todoData = s.toolInputs?.get(toolCallId);
+
+                      window.acpLog?.('INFO', '[ACP] ✅ TodoWrite completed');
+
+                      const result = {
+                        success: true
+                      };
+
+                      svc.updateComposerDataSetStore({{e}}, u => {
+                        u("conversationMap", toolBubbleId, "toolFormerData", "status", todoFinalStatus);
                         u("conversationMap", toolBubbleId, "toolFormerData", "result", result);
                       });
                     }
