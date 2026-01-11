@@ -1194,8 +1194,20 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                     if (!s.toolInputs) s.toolInputs = new Map();
                     s.toolInputs.set(toolCallId, { query });
 
-                    // Create the tool bubble
-                    const rawArgs = { query };
+                    window.acpLog?.('INFO', '[ACP] 🌐 Creating WEB_SEARCH bubble:', toolCallId, query?.substring(0, 50));
+
+                    // Create the tool bubble with toolFormerData included (like grep)
+                    const toolData = {
+                      tool: WEB_SEARCH_TYPE,
+                      toolCallId: toolCallId,
+                      toolIndex: 0,
+                      modelCallId: "",
+                      status: 'loading',
+                      name: 'web_search',
+                      params: { search_term: query },
+                      rawArgs: { search_term: query },
+                      additionalData: {}
+                    };
 
                     const toolBubble = {
                       bubbleId: toolBubbleId,
@@ -1203,24 +1215,15 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                       text: '',
                       richText: '',
                       codeBlocks: [],
-                      createdAt: Date.now(),
-                      capabilityType: 'agentic'
+                      createdAt: new Date().toISOString(),
+                      capabilityType: TOOL_FORMER_CAPABILITY,
+                      toolFormerData: toolData
                     };
 
-                    window.acpLog?.('INFO', '[ACP] 🌐 Creating WEB_SEARCH bubble:', toolCallId, query?.substring(0, 50));
-
                     svc.appendComposerBubbles(composerHandle, [toolBubble]);
-
                     svc.updateComposerDataSetStore({{e}}, u => {
-                      u("conversationMap", toolBubbleId, "toolFormerData", {
-                        type: WEB_SEARCH_TYPE,
-                        tool: WEB_SEARCH_TYPE,
-                        toolCallId: toolCallId,
-                        status: 'running',
-                        requestId: toolBubbleId,
-                        rawArgs: JSON.stringify(rawArgs),
-                        params: rawArgs
-                      });
+                      u("generatingBubbleIds", [toolBubbleId]);
+                      u("currentBubbleId", toolBubbleId);
                     });
                   }
 
@@ -1236,15 +1239,31 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                         const textContent = tc.content.find(c => c.type === 'content');
                         if (textContent?.content?.text) {
                           output = textContent.content.text;
+                        } else if (textContent?.text) {
+                          output = textContent.text;
                         }
                       }
 
-                      window.acpLog?.('INFO', '[ACP] ✅ WebSearch completed');
+                      window.acpLog?.('INFO', '[ACP] ✅ WebSearch completed, output length:', output?.length);
 
-                      // Build result - web search results typically have references
+                      // Parse web references from output if available
+                      // Format varies, but typically includes URLs and snippets
+                      const webReferences = [];
+                      
+                      // Try to extract URLs from output
+                      const urlRegex = /https?:\/\/[^\s\])"']+/g;
+                      const urls = output?.match(urlRegex) || [];
+                      urls.slice(0, 10).forEach((url, i) => {
+                        webReferences.push({
+                          title: `Result ${i + 1}`,
+                          url: url,
+                          snippet: ''
+                        });
+                      });
+
+                      // Build result matching Cursor's expected format for web search
                       const result = {
-                        success: true,
-                        references: [] // Would parse actual references from output
+                        webReferences: webReferences
                       };
 
                       svc.updateComposerDataSetStore({{e}}, u => {
