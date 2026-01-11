@@ -1,9 +1,0 @@
-2026-01-10 20:09:27.675 [info] [CursorProclistService] Native module loaded successfully
-2026-01-10 20:09:27.685 [info] updateURL https://api2.cursor.sh/updates/api/update/darwin-universal/cursor/2.3.29/32849841f6a8926d4f425e6efe1498d0ee755a341151da12a7c1954e02e2015a/stable
-2026-01-10 20:09:27.687 [info] update#setState idle
-2026-01-10 20:09:28.218 [info] [Tray] getMacOSIconPath: hasNotifications: false
-2026-01-10 20:09:30.956 [info] [CursorProclistService] Config enabled feature (subsample every 10s)
-2026-01-10 20:09:57.689 [info] update#setState checking for updates
-2026-01-10 20:09:58.058 [info] UpdateService onUpdateNotAvailable()
-2026-01-10 20:09:58.059 [info] update#setState idle
-2026-01-10 20:10:01.174 [info] Extension host with pid 51378 exited with code: 0, signal: unknown.
