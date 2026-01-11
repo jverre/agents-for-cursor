@@ -75,9 +75,8 @@ describe('E2E: Claude Code (ACP) WebSearch Tool', () => {
 
     await cursor.screenshot('13-websearch-8-final.png');
 
-    // Assertions - at minimum we should have a response
+    // Assertions - tool bubble must exist
     expect(hasResponse).toBe(true);
-    // Tool call is optional - Claude may respond with text if it has cached knowledge
-    console.log('[Test] Note: WebSearch tool usage depends on Claude deciding to search');
+    expect(toolCallExists).toBe(true);
   }, 180000); // 3 minute timeout for the full test
 });

@@ -75,9 +75,8 @@ describe('E2E: Claude Code (ACP) Task Tool', () => {
 
     await cursor.screenshot('12-task-8-final.png');
 
-    // Assertions - at minimum we should have a response
+    // Assertions - tool bubble must exist
     expect(hasResponse).toBe(true);
-    // Tool call is optional - Claude may just respond with text instead of using the task tool
-    console.log('[Test] Note: Task tool usage is optional - Claude may respond with text instead');
+    expect(toolCallExists).toBe(true);
   }, 180000); // 3 minute timeout for the full test
 });
