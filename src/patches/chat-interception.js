@@ -163,8 +163,8 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                 const GREP_TYPE = 41;
                 const GLOB_TYPE = 42;
                 const LIST_DIR_TYPE = 39;
-                const TASK_V2_TYPE = 48;
                 const TODO_WRITE_TYPE = 35;
+                const MCP_TOOL_TYPE = 99; // Generic MCP tool fallback
                 const WEB_SEARCH_TYPE = 18;
                 const SWITCH_MODE_TYPE = 52;
 
@@ -173,7 +173,6 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                 const isReadTool = tc.kind === 'read' || storedType?.isRead;
                 const isBashTool = tc.kind === 'execute' || storedType?.isBash;
                 const isEditTool = tc.kind === 'edit' || storedType?.isEdit;
-                const isTaskTool = tc.kind === 'think' || storedType?.isTask;
                 const isTodoWriteTool = (tc.kind === 'think' && tc.title?.toLowerCase().includes('todo')) || storedType?.isTodoWrite;
                 // Fetch tools: WebSearch and WebFetch
                 const isWebSearchTool = tc.kind === 'fetch' || storedType?.isWebSearch;
@@ -1018,90 +1017,6 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                   return;
                 }
 
-                // ===== TASK TOOL (Type 48) =====
-                if (isTaskTool && !isTodoWriteTool) {
-                  // Create bubble on first tool_call
-                  if (isNew && !s.toolBubbles.has(toolCallId)) {
-                    const taskDescription = inputObj.description || inputObj.content || tc.title || 'Task';
-
-                    s.bubbleId = null;
-                    s.text = '';
-
-                    const toolBubbleId = gen();
-                    s.toolBubbles.set(toolCallId, toolBubbleId);
-
-                    if (!s.toolTypes) s.toolTypes = new Map();
-                    s.toolTypes.set(toolCallId, { isTask: true });
-
-                    // Store task input for later use
-                    if (!s.toolInputs) s.toolInputs = new Map();
-                    s.toolInputs.set(toolCallId, { description: taskDescription });
-
-                    // Create the tool bubble
-                    const rawArgs = { description: taskDescription };
-
-                    const toolBubble = {
-                      bubbleId: toolBubbleId,
-                      type: 2,
-                      text: '',
-                      richText: '',
-                      codeBlocks: [],
-                      createdAt: Date.now(),
-                      capabilityType: 'agentic'
-                    };
-
-                    window.acpLog?.('INFO', '[ACP] 💭 Creating TASK bubble:', toolCallId, taskDescription?.substring(0, 50));
-
-                    svc.appendComposerBubbles(composerHandle, [toolBubble]);
-
-                    svc.updateComposerDataSetStore({{e}}, u => {
-                      u("conversationMap", toolBubbleId, "toolFormerData", {
-                        type: TASK_V2_TYPE,
-                        tool: TASK_V2_TYPE,
-                        toolCallId: toolCallId,
-                        status: 'running',
-                        requestId: toolBubbleId,
-                        rawArgs: JSON.stringify(rawArgs),
-                        params: rawArgs
-                      });
-                    });
-                  }
-
-                  // Handle completion
-                  if (isComplete || isFailed) {
-                    const taskFinalStatus = isFailed ? 'error' : 'completed';
-                    const toolBubbleId = s.toolBubbles.get(toolCallId);
-
-                    if (toolBubbleId) {
-                      // Get task output
-                      let output = '';
-                      if (Array.isArray(tc.content)) {
-                        const textContent = tc.content.find(c => c.type === 'content');
-                        if (textContent?.content?.text) {
-                          output = textContent.content.text;
-                        }
-                      }
-
-                      const taskData = s.toolInputs?.get(toolCallId);
-
-                      window.acpLog?.('INFO', '[ACP] ✅ Task completed');
-
-                      // Build result - Task result is simple
-                      const result = {
-                        success: true,
-                        output: output
-                      };
-
-                      svc.updateComposerDataSetStore({{e}}, u => {
-                        u("conversationMap", toolBubbleId, "toolFormerData", "status", taskFinalStatus);
-                        u("conversationMap", toolBubbleId, "toolFormerData", "result", result);
-                      });
-                    }
-                  }
-
-                  return;
-                }
-
                 // ===== TODO_WRITE TOOL (Type 35) =====
                 if (isTodoWriteTool) {
                   // Create bubble on first tool_call
@@ -1341,6 +1256,92 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                   }
 
                   return;
+                }
+
+                // ===== MCP TOOL FALLBACK (Generic handler for unrecognized MCP tools) =====
+                // This handles any MCP tool that doesn't have a specific handler above
+                if (tc.kind && !s.toolBubbles.has(toolCallId)) {
+                  const toolName = tc.title || tc.kind || 'MCP Tool';
+                  
+                  window.acpLog?.('INFO', '[ACP] 🔧 MCP Fallback - Creating bubble for:', tc.kind, toolName);
+
+                  s.bubbleId = null;
+                  s.text = '';
+
+                  const toolBubbleId = gen();
+                  s.toolBubbles.set(toolCallId, toolBubbleId);
+
+                  if (!s.toolTypes) s.toolTypes = new Map();
+                  s.toolTypes.set(toolCallId, { isMcp: true, kind: tc.kind });
+
+                  // Store input for later
+                  if (!s.toolInputs) s.toolInputs = new Map();
+                  s.toolInputs.set(toolCallId, inputObj);
+
+                  // Create the tool bubble with toolFormerData included
+                  const toolData = {
+                    tool: MCP_TOOL_TYPE,
+                    toolCallId: toolCallId,
+                    toolIndex: 0,
+                    modelCallId: "",
+                    status: 'loading',
+                    name: tc.kind || 'mcp_tool',
+                    params: inputObj,
+                    rawArgs: inputObj,
+                    additionalData: {
+                      mcpKind: tc.kind,
+                      mcpTitle: tc.title
+                    }
+                  };
+
+                  const toolBubble = {
+                    bubbleId: toolBubbleId,
+                    type: 2,
+                    text: '',
+                    richText: '',
+                    codeBlocks: [],
+                    createdAt: new Date().toISOString(),
+                    capabilityType: TOOL_FORMER_CAPABILITY,
+                    toolFormerData: toolData
+                  };
+
+                  svc.appendComposerBubbles(composerHandle, [toolBubble]);
+                  svc.updateComposerDataSetStore({{e}}, u => {
+                    u("generatingBubbleIds", [toolBubbleId]);
+                    u("currentBubbleId", toolBubbleId);
+                  });
+                }
+
+                // Handle MCP fallback completion
+                const storedMcpType = s.toolTypes?.get(toolCallId);
+                if (storedMcpType?.isMcp && (isComplete || isFailed)) {
+                  const mcpFinalStatus = isFailed ? 'error' : 'completed';
+                  const toolBubbleId = s.toolBubbles.get(toolCallId);
+
+                  if (toolBubbleId) {
+                    // Get output
+                    let output = '';
+                    if (Array.isArray(tc.content)) {
+                      const textContent = tc.content.find(c => c.type === 'content');
+                      if (textContent?.content?.text) {
+                        output = textContent.content.text;
+                      } else if (textContent?.text) {
+                        output = textContent.text;
+                      }
+                    }
+
+                    window.acpLog?.('INFO', '[ACP] ✅ MCP Tool completed:', storedMcpType.kind);
+
+                    const result = {
+                      success: !isFailed,
+                      output: output
+                    };
+
+                    svc.updateComposerDataSetStore({{e}}, u => {
+                      u("conversationMap", toolBubbleId, "toolFormerData", "status", mcpFinalStatus);
+                      u("conversationMap", toolBubbleId, "toolFormerData", "result", result);
+                    });
+                  }
                 }
               }
             }
