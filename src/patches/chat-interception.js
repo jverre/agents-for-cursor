@@ -166,16 +166,21 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                 const TODO_WRITE_TYPE = 35;
                 const MCP_TOOL_TYPE = 99; // Generic MCP tool fallback
                 const WEB_SEARCH_TYPE = 18;
+                const WEB_FETCH_TYPE = 19; // URL fetch tool
                 const SWITCH_MODE_TYPE = 52;
 
                 // Detect tool type (use stored type for updates, or detect from event)
                 const storedType = s.toolTypes?.get(toolCallId);
                 const isReadTool = tc.kind === 'read' || storedType?.isRead;
-                const isBashTool = tc.kind === 'execute' || storedType?.isBash;
+                // BashOutput: execute with pid/process_id (reading from background process)
+                const isBashOutputTool = (tc.kind === 'execute' && (inputObj.pid || inputObj.process_id || inputObj.tail)) || storedType?.isBashOutput;
+                // Regular bash: execute with command (running a new command)
+                const isBashTool = (tc.kind === 'execute' && !isBashOutputTool) || storedType?.isBash;
                 const isEditTool = tc.kind === 'edit' || storedType?.isEdit;
                 const isTodoWriteTool = (tc.kind === 'think' && tc.title?.toLowerCase().includes('todo')) || storedType?.isTodoWrite;
-                // Fetch tools: WebSearch and WebFetch
-                const isWebSearchTool = tc.kind === 'fetch' || storedType?.isWebSearch;
+                // Fetch tools: WebSearch (has query/search_term) and WebFetch (has url)
+                const isWebFetchTool = (tc.kind === 'fetch' && inputObj.url) || storedType?.isWebFetch;
+                const isWebSearchTool = (tc.kind === 'fetch' && !inputObj.url) || storedType?.isWebSearch;
                 // Switch mode tool (ExitPlanMode)
                 const isSwitchModeTool = tc.kind === 'switch_mode' || storedType?.isSwitchMode;
                 
@@ -416,6 +421,111 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                     const toolBubbleId = s.toolBubbles.get(toolCallId);
                     if (toolBubbleId) {
                       const finalStatus = isFailed ? 'error' : 'completed';
+                      svc.updateComposerDataSetStore({{e}}, u => {
+                        u("conversationMap", toolBubbleId, "toolFormerData", "status", finalStatus);
+                        u("conversationMap", toolBubbleId, "toolFormerData", "additionalData", "status", finalStatus === 'completed' ? 'success' : 'error');
+                      });
+                    }
+                  }
+
+                  return;
+                }
+
+                // ===== BASH_OUTPUT TOOL - Tail logs from background commands =====
+                if (isBashOutputTool) {
+                  if (isNew && !s.toolBubbles.has(toolCallId)) {
+                    const pid = inputObj.pid || inputObj.process_id || '';
+                    const description = inputObj.description || tc.title || `Reading output from process ${pid}`;
+
+                    s.bubbleId = null;
+                    s.text = '';
+
+                    const toolBubbleId = gen();
+                    s.toolBubbles.set(toolCallId, toolBubbleId);
+
+                    if (!s.toolTypes) s.toolTypes = new Map();
+                    s.toolTypes.set(toolCallId, { isBashOutput: true });
+
+                    window.acpLog?.('INFO', '[ACP] 📋 Creating BASH_OUTPUT bubble:', toolCallId, pid);
+
+                    const toolData = {
+                      tool: RUN_TERMINAL_COMMAND_V2_TYPE,
+                      toolCallId: toolCallId,
+                      status: 'loading',
+                      name: 'bash_output',
+                      params: {
+                        pid: pid,
+                        tail: true,
+                        description: description
+                      },
+                      rawArgs: {
+                        pid: pid,
+                        tail: true
+                      },
+                      additionalData: {
+                        status: 'loading',
+                        isBashOutput: true
+                      },
+                      result: null
+                    };
+
+                    const toolBubble = {
+                      bubbleId: toolBubbleId,
+                      type: 2,
+                      text: '',
+                      richText: '',
+                      codeBlocks: [],
+                      createdAt: new Date().toISOString(),
+                      capabilityType: TOOL_FORMER_CAPABILITY,
+                      toolFormerData: toolData
+                    };
+
+                    svc.appendComposerBubbles(composerHandle, [toolBubble]);
+                    svc.updateComposerDataSetStore({{e}}, u => {
+                      u("generatingBubbleIds", [toolBubbleId]);
+                      u("currentBubbleId", toolBubbleId);
+                    });
+                  }
+
+                  // Extract output from toolResponse
+                  if (tc._meta?.claudeCode?.toolResponse) {
+                    const toolBubbleId = s.toolBubbles.get(toolCallId);
+                    if (toolBubbleId) {
+                      const toolResponse = tc._meta.claudeCode.toolResponse[0];
+                      if (toolResponse?.type === 'text' && toolResponse?.text) {
+                        let output = toolResponse.text;
+                        
+                        // Parse output format
+                        const match = output.match(/(?:New output|Output):\n\n([\s\S]*)/);
+                        if (match) {
+                          output = match[1];
+                        }
+
+                        const result = {
+                          output: output,
+                          exitCodeV2: 0,
+                          rejected: false,
+                          notInterrupted: true,
+                          endedReason: 'RUN_TERMINAL_COMMAND_ENDED_REASON_EXECUTION_COMPLETED',
+                          effectiveSandboxPolicy: {
+                            type: 'TYPE_INSECURE_NONE'
+                          }
+                        };
+
+                        svc.updateComposerDataSetStore({{e}}, u => {
+                          u("conversationMap", toolBubbleId, "toolFormerData", "result", result);
+                          u("conversationMap", toolBubbleId, "toolFormerData", "additionalData", "status", "success");
+                        });
+                      }
+                    }
+                  }
+
+                  // Handle completion
+                  if (isComplete || isFailed) {
+                    const toolBubbleId = s.toolBubbles.get(toolCallId);
+                    if (toolBubbleId) {
+                      const finalStatus = isFailed ? 'error' : 'completed';
+                      window.acpLog?.('INFO', '[ACP] ✅ BashOutput completed');
                       svc.updateComposerDataSetStore({{e}}, u => {
                         u("conversationMap", toolBubbleId, "toolFormerData", "status", finalStatus);
                         u("conversationMap", toolBubbleId, "toolFormerData", "additionalData", "status", finalStatus === 'completed' ? 'success' : 'error');
@@ -1082,6 +1192,95 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
 
                       svc.updateComposerDataSetStore({{e}}, u => {
                         u("conversationMap", toolBubbleId, "toolFormerData", "status", todoFinalStatus);
+                        u("conversationMap", toolBubbleId, "toolFormerData", "result", result);
+                      });
+                    }
+                  }
+
+                  return;
+                }
+
+                // ===== WEB_FETCH TOOL (Type 19) - Fetch URL content =====
+                if (isWebFetchTool) {
+                  // Create bubble on first tool_call
+                  if (isNew && !s.toolBubbles.has(toolCallId)) {
+                    const url = inputObj.url || tc.title || 'URL Fetch';
+
+                    s.bubbleId = null;
+                    s.text = '';
+
+                    const toolBubbleId = gen();
+                    s.toolBubbles.set(toolCallId, toolBubbleId);
+
+                    if (!s.toolTypes) s.toolTypes = new Map();
+                    s.toolTypes.set(toolCallId, { isWebFetch: true });
+
+                    // Store URL for later
+                    if (!s.toolInputs) s.toolInputs = new Map();
+                    s.toolInputs.set(toolCallId, { url });
+
+                    window.acpLog?.('INFO', '[ACP] 🌐 Creating WEB_FETCH bubble:', toolCallId, url?.substring(0, 80));
+
+                    // Create the tool bubble with toolFormerData included
+                    const toolData = {
+                      tool: WEB_FETCH_TYPE,
+                      toolCallId: toolCallId,
+                      toolIndex: 0,
+                      modelCallId: "",
+                      status: 'loading',
+                      name: 'web_fetch',
+                      params: { url: url },
+                      rawArgs: { url: url },
+                      additionalData: {}
+                    };
+
+                    const toolBubble = {
+                      bubbleId: toolBubbleId,
+                      type: 2,
+                      text: '',
+                      richText: '',
+                      codeBlocks: [],
+                      createdAt: new Date().toISOString(),
+                      capabilityType: TOOL_FORMER_CAPABILITY,
+                      toolFormerData: toolData
+                    };
+
+                    svc.appendComposerBubbles(composerHandle, [toolBubble]);
+                    svc.updateComposerDataSetStore({{e}}, u => {
+                      u("generatingBubbleIds", [toolBubbleId]);
+                      u("currentBubbleId", toolBubbleId);
+                    });
+                  }
+
+                  // Handle completion
+                  if (isComplete || isFailed) {
+                    const webFetchFinalStatus = isFailed ? 'error' : 'completed';
+                    const toolBubbleId = s.toolBubbles.get(toolCallId);
+
+                    if (toolBubbleId) {
+                      // Get fetched content
+                      let output = '';
+                      if (Array.isArray(tc.content)) {
+                        const textContent = tc.content.find(c => c.type === 'content');
+                        if (textContent?.content?.text) {
+                          output = textContent.content.text;
+                        } else if (textContent?.text) {
+                          output = textContent.text;
+                        }
+                      }
+
+                      const fetchData = s.toolInputs?.get(toolCallId);
+                      window.acpLog?.('INFO', '[ACP] ✅ WebFetch completed, output length:', output?.length);
+
+                      // Build result with fetched content
+                      const result = {
+                        url: fetchData?.url || '',
+                        content: output,
+                        success: !isFailed
+                      };
+
+                      svc.updateComposerDataSetStore({{e}}, u => {
+                        u("conversationMap", toolBubbleId, "toolFormerData", "status", webFetchFinalStatus);
                         u("conversationMap", toolBubbleId, "toolFormerData", "result", result);
                       });
                     }
