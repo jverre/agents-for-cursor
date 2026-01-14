@@ -19,6 +19,9 @@ This is a VS Code/Cursor extension that integrates Claude Code (ACP - Agent Clie
 ```bash
 # Run e2e tests with isolated Cursor installation
 npm run test:e2e:local
+
+# Or use the local flag with specific tests
+npm run test:e2e -- --local tests/e2e/glob-tool.test.js
 ```
 
 This command:
@@ -34,6 +37,7 @@ This command:
 |---------|-------------|
 | `npm run start` | Launch isolated Cursor for manual testing (applies patches, keeps running) |
 | `npm run test:e2e:local` | Run e2e tests using isolated Cursor (recommended for development) |
+| `npm run test:e2e -- --local <path>` | Run specific e2e tests with isolated Cursor |
 | `npm run test:e2e` | Run e2e tests using system Cursor (used in CI) |
 | `npm run setup:check` | Check if isolated Cursor is installed |
 | `npm run download-cursor` | Download Cursor installer to cache |
@@ -55,7 +59,7 @@ The test setup:
 
 ### Environment Variables
 
-- `LOCAL=true` - Use isolated installation (set automatically by `test:e2e:local`)
+- `LOCAL=true` - Use isolated installation (set automatically by `test:e2e:local` or `--local`)
 - `CI=true` - CI mode, expects pre-installed Cursor
 - `CURSOR_AUTH_TOKEN` - Override auth token (optional, extracted automatically in local mode)
 - `CURSOR_EMAIL` - Override email (optional)

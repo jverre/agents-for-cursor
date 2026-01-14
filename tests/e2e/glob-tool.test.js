@@ -75,22 +75,36 @@ describe('E2E: Claude Code (ACP) Glob Tool', () => {
     
     // Use Playwright's locator to find and click the glob results to expand
     // The glob tool bubble shows "Searched files" header that needs to be clicked
+    const clickLocatorWithRetry = async (locator, label, attempts = 3) => {
+      for (let i = 0; i < attempts; i++) {
+        try {
+          await locator.waitFor({ state: 'attached', timeout: 3000 });
+          await locator.scrollIntoViewIfNeeded();
+          await locator.click({ timeout: 3000 });
+          console.log(`[Test] Clicked on "${label}" to expand`);
+          return true;
+        } catch (err) {
+          const message = String(err?.message || err);
+          if (!message.includes('Element is not attached to the DOM')) {
+            throw err;
+          }
+          await cursor.sleep(300);
+        }
+      }
+      return false;
+    };
+
     let globClicked = false;
     try {
       // Try clicking on "Searched files" which is the glob header
       const searchedFilesLocator = cursor.mainWindow.locator('text=/Searched files/i').first();
-      await searchedFilesLocator.waitFor({ timeout: 5000 });
-      await searchedFilesLocator.click();
-      globClicked = true;
-      console.log('[Test] Clicked on "Searched files" to expand');
+      globClicked = await clickLocatorWithRetry(searchedFilesLocator, 'Searched files');
     } catch (e) {
       console.log('[Test] Could not click "Searched files", trying fallback...');
       try {
         // Fallback: try "Globbed" or "Found files"
         const globLocator = cursor.mainWindow.locator('text=/Globbed|Found.*files|glob/i').first();
-        await globLocator.waitFor({ timeout: 3000 });
-        await globLocator.click();
-        globClicked = true;
+        globClicked = await clickLocatorWithRetry(globLocator, 'Globbed/Found files');
       } catch (e2) {
         console.log('[Test] Could not click with locator, trying fallback...');
         // Fallback: click on any tool bubble

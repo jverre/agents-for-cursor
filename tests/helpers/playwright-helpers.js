@@ -69,7 +69,7 @@ class CursorAutomation {
 
   async launch() {
     // Kill any lingering Cursor processes before launching (important on Linux CI)
-    if (process.platform === 'linux') {
+    if (process.platform === 'linux' && process.env.CI === 'true') {
       const { exec } = require('child_process');
       // Target the actual Cursor executable path, not the test directory
       await new Promise(resolve => {
@@ -396,18 +396,21 @@ class CursorAutomation {
       this.electronApp = null;
       this.mainWindow = null;
 
-      // Kill any lingering Cursor processes
-      const killPattern = this.useIsolated 
-        ? '.cursor-test-installation' 
-        : (process.platform === 'linux' ? '.local/share/Cursor' : 'Cursor');
-      
-      await new Promise(resolve => {
-        if (process.platform === 'win32') {
-          exec('taskkill /F /IM Cursor.exe 2>nul', () => resolve());
-        } else {
-          exec(`pkill -9 -f "${killPattern}" 2>/dev/null || true`, () => resolve());
-        }
-      });
+      // Kill lingering processes only for isolated installs, or on Linux CI
+      const shouldKillByPattern = this.useIsolated || (process.platform === 'linux' && process.env.CI === 'true');
+      if (shouldKillByPattern) {
+        const killPattern = this.useIsolated
+          ? '.cursor-test-installation'
+          : '.local/share/Cursor';
+
+        await new Promise(resolve => {
+          if (process.platform === 'win32') {
+            exec('taskkill /F /IM Cursor.exe 2>nul', () => resolve());
+          } else {
+            exec(`pkill -9 -f "${killPattern}" 2>/dev/null || true`, () => resolve());
+          }
+        });
+      }
       
       // Brief wait for cleanup
       await this.sleep(500);
