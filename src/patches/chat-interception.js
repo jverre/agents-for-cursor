@@ -7,6 +7,11 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
       {{s}}.setAttribute("requestId", {{r}});
 
       {{ACP_TOKEN}}
+      window.ACP_DEBUG = {{ACP_DEBUG}};
+      window.acpDebug = (...args) => {
+        if (!window.ACP_DEBUG) return;
+        window.acpLog?.('DEBUG', ...args);
+      };
       /* === ACP CHAT INTERCEPTION === */
       const composerHandle = this._composerDataService.getWeakHandleOptimistic({{e}});
       const modelName = {{n}}?.modelOverride || composerHandle?.data?.modelConfig?.modelName || '';
@@ -136,7 +141,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                 const inputObj = typeof toolInput === 'string' ? (() => { try { return JSON.parse(toolInput); } catch { return {}; } })() : toolInput;
 
                 // DEBUG: Log all tool calls with full details including content
-                window.acpLog?.('DEBUG', '[ACP] onToolCall FULL:', JSON.stringify({
+                window.acpDebug?.( '[ACP] onToolCall FULL:', JSON.stringify({
                   kind: tc.kind,
                   title: tc.title,
                   sessionUpdate: tc.sessionUpdate,
@@ -194,7 +199,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                 
                 // Debug log for tool detection
                 if (tc.kind === 'search' || storedType?.isGlob || storedType?.isGrep || storedType?.isListDir) {
-                  window.acpLog?.('DEBUG', '[ACP] Search tool detection:', JSON.stringify({
+                  window.acpDebug?.( '[ACP] Search tool detection:', JSON.stringify({
                     kind: tc.kind,
                     title: tc.title,
                     status: status,
@@ -559,7 +564,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                       newText: diffContent?.newText || null
                     });
                     
-                    window.acpLog?.('DEBUG', '[ACP] Stored edit data for', toolCallId, 
+                    window.acpDebug?.( '[ACP] Stored edit data for', toolCallId, 
                       'filePath:', inputObj.file_path,
                       'oldString len:', inputObj.old_string?.length || 0,
                       'newString len:', inputObj.new_string?.length || 0,
@@ -580,7 +585,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                     // Get file path from ACP data
                     const filePath = inputObj.file_path || '';
 
-                    window.acpLog?.('DEBUG', '[ACP] Edit creating bubble - filePath:', filePath);
+                    window.acpDebug?.( '[ACP] Edit creating bubble - filePath:', filePath);
 
                     // Match Cursor's expected format for edit_file_v2
                     const toolData = {
@@ -623,7 +628,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                     const toolBubbleId = s.toolBubbles.get(toolCallId);
                     const editData = s.editData?.get(toolCallId);
                     
-                    window.acpLog?.('DEBUG', '[ACP] Edit completion - toolBubbleId:', !!toolBubbleId, 'editData:', !!editData);
+                    window.acpDebug?.( '[ACP] Edit completion - toolBubbleId:', !!toolBubbleId, 'editData:', !!editData);
                     
                     if (toolBubbleId && editData) {
                       const finalStatus = isFailed ? 'error' : 'completed';
@@ -640,7 +645,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                         afterContent = editData.newString || '';
                       }
 
-                      window.acpLog?.('DEBUG', '[ACP] Edit content lengths - Before:', beforeContent?.length || 0, 'After:', afterContent?.length || 0);
+                      window.acpDebug?.( '[ACP] Edit content lengths - Before:', beforeContent?.length || 0, 'After:', afterContent?.length || 0);
 
                       // Simple hash function (matches Cursor's E9 hash)
                       const hashContent = async (content) => {
@@ -666,7 +671,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                             await storageService.cursorDiskKVSet(beforeContentId, beforeContent);
                             await storageService.cursorDiskKVSet(afterContentId, afterContent);
 
-                            window.acpLog?.('DEBUG', '[ACP] Stored content - Before ID:', beforeContentId.substring(0, 60), 'After ID:', afterContentId.substring(0, 60));
+                            window.acpDebug?.( '[ACP] Stored content - Before ID:', beforeContentId.substring(0, 60), 'After ID:', afterContentId.substring(0, 60));
                           } else {
                             window.acpLog?.('WARN', '[ACP] Storage service not found on svc._storageService');
                           }
@@ -690,7 +695,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                           u("conversationMap", toolBubbleId, "toolFormerData", "result", result);
                         });
 
-                        window.acpLog?.('DEBUG', '[ACP] Result set with IDs - beforeContentId:', beforeContentId, 'afterContentId:', afterContentId);
+                        window.acpDebug?.( '[ACP] Result set with IDs - beforeContentId:', beforeContentId, 'afterContentId:', afterContentId);
                       })();
                     }
                   }
@@ -715,7 +720,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                       caseInsensitive: inputObj['-i'] || false,
                       headLimit: inputObj.head_limit
                     });
-                    window.acpLog?.('DEBUG', '[ACP] Stored grep data for', toolCallId, 'pattern:', inputObj.pattern);
+                    window.acpDebug?.( '[ACP] Stored grep data for', toolCallId, 'pattern:', inputObj.pattern);
                   }
 
                   if (isNew && !s.toolBubbles.has(toolCallId)) {
@@ -729,7 +734,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                     s.toolTypes.set(toolCallId, { isGrep: true });
 
                     const grepData = s.grepData?.get(toolCallId) || {};
-                    window.acpLog?.('DEBUG', '[ACP] Grep creating bubble - pattern:', grepData.pattern, 'path:', grepData.path);
+                    window.acpDebug?.( '[ACP] Grep creating bubble - pattern:', grepData.pattern, 'path:', grepData.path);
 
                     // Match Cursor's expected format for grep (Type 41)
                     const toolData = {
@@ -811,7 +816,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                       }
                       
                       const files = Array.from(fileMatchCounts.keys());
-                      window.acpLog?.('DEBUG', '[ACP] Grep result - files found:', files.length, 'output length:', output.length, 'match counts:', JSON.stringify(Object.fromEntries(fileMatchCounts)));
+                      window.acpDebug?.( '[ACP] Grep result - files found:', files.length, 'output length:', output.length, 'match counts:', JSON.stringify(Object.fromEntries(fileMatchCounts)));
 
                       // Match Cursor's expected result format for grep (RIPGREP_RAW_SEARCH)
                       // The workbench expects: result.result.case === "success" and result.result.value.workspaceResults
@@ -852,7 +857,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                         }
                       };
                       
-                      window.acpLog?.('DEBUG', '[ACP] Grep result object:', JSON.stringify(result, null, 2));
+                      window.acpDebug?.( '[ACP] Grep result object:', JSON.stringify(result, null, 2));
 
                       svc.updateComposerDataSetStore({{e}}, u => {
                         u("conversationMap", toolBubbleId, "toolFormerData", "status", finalStatus);
@@ -954,8 +959,8 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                       const globData = s.toolInputs?.get(toolCallId);
                       const targetDir = globData?.targetDir || '.';
                       
-                      window.acpLog?.('DEBUG', '[ACP] Glob content:', JSON.stringify(tc.content, null, 2));
-                      window.acpLog?.('DEBUG', '[ACP] Glob output text:', output);
+                      window.acpDebug?.( '[ACP] Glob content:', JSON.stringify(tc.content, null, 2));
+                      window.acpDebug?.( '[ACP] Glob output text:', output);
                       
                       // Parse files from output (one per line)
                       const rawFiles = output.split('\n')
@@ -990,7 +995,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                         }]
                       };
 
-                      window.acpLog?.('DEBUG', '[ACP] Glob result object:', JSON.stringify(result, null, 2));
+                      window.acpDebug?.( '[ACP] Glob result object:', JSON.stringify(result, null, 2));
 
                       svc.updateComposerDataSetStore({{e}}, u => {
                         u("conversationMap", toolBubbleId, "toolFormerData", "status", globFinalStatus);
@@ -1067,7 +1072,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                         }
                       }
                       
-                      window.acpLog?.('DEBUG', '[ACP] List_dir output text:', output?.substring(0, 200));
+                      window.acpDebug?.( '[ACP] List_dir output text:', output?.substring(0, 200));
                       
                       const listDirData = s.toolInputs?.get(toolCallId);
                       const targetDir = listDirData?.targetDir || '.';
@@ -1115,7 +1120,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                         }
                       };
 
-                      window.acpLog?.('DEBUG', '[ACP] List_dir result object:', JSON.stringify(result, null, 2));
+                      window.acpDebug?.( '[ACP] List_dir result object:', JSON.stringify(result, null, 2));
 
                       svc.updateComposerDataSetStore({{e}}, u => {
                         u("conversationMap", toolBubbleId, "toolFormerData", "status", listDirFinalStatus);

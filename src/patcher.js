@@ -13,6 +13,11 @@ function getAcpToken() {
     return `/* ACP_PATCH_${getExtensionVersion()} */`;
 }
 
+// ACP debug flag injected into renderer patches
+function getAcpDebugFlag() {
+    return process.env.ACP_DEBUG === 'true';
+}
+
 // Get the Cursor app root path
 function getCursorAppRoot() {
     // vscode.env.appRoot points to the app's Resources/app directory
@@ -69,7 +74,9 @@ async function applyPatches() {
     const patchesDir = path.join(__dirname, 'patches');
     const acpServicePatch = await readPatchFile(path.join(patchesDir, 'acp-service.js'));
     const modelPatch = await readPatchFile(path.join(patchesDir, 'model-patch.js'));
-    const extensionBridgePatch = await readPatchFile(path.join(patchesDir, 'extension-bridge.js'));
+    const debugFlag = getAcpDebugFlag() ? 'true' : 'false';
+    const extensionBridgePatch = (await readPatchFile(path.join(patchesDir, 'extension-bridge.js')))
+        .replace(/\{\{ACP_DEBUG\}\}/g, debugFlag);
     const slashCommandPatch = await readPatchFile(path.join(patchesDir, 'slash-command-patch.js'));
 
     // Prepend patches to bootstrap workbench
@@ -122,8 +129,10 @@ async function patchMainWorkbench() {
 
         // Read chat interception template and substitute variables
         const chatInterceptionTemplate = await readPatchFile(path.join(__dirname, 'patches', 'chat-interception.js'));
+        const debugFlag = getAcpDebugFlag() ? 'true' : 'false';
         const acpInterceptionCode = chatInterceptionTemplate
             .replace(/\{\{ACP_TOKEN\}\}/g, getAcpToken())
+            .replace(/\{\{ACP_DEBUG\}\}/g, debugFlag)
             .replace(/\{\{e\}\}/g, e)
             .replace(/\{\{t\}\}/g, t)
             .replace(/\{\{n\}\}/g, n)

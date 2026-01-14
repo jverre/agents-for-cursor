@@ -61,6 +61,7 @@ The test setup:
 
 - `LOCAL=true` - Use isolated installation (set automatically by `test:e2e:local` or `--local`)
 - `CI=true` - CI mode, expects pre-installed Cursor
+- `ACP_DEBUG=true` - Enable verbose ACP debug logs in the renderer/bridge
 - `CURSOR_AUTH_TOKEN` - Override auth token (optional, extracted automatically in local mode)
 - `CURSOR_EMAIL` - Override email (optional)
 
@@ -89,6 +90,16 @@ All ACP activity is logged to `~/.cursor-acp.log`. This includes both extension-
 # Watch logs in real-time during manual testing
 tail -f ~/.cursor-acp.log
 ```
+
+To enable verbose renderer debug logs, set the environment variable before launching Cursor:
+
+```bash
+ACP_DEBUG=true npm run start
+```
+
+Note: `ACP_DEBUG` is injected into patched workbench files at patch time. If you
+change the flag, re-run `Agents for Cursor: Enable` (or re-run tests) so the
+patched files are updated.
 
 In tests, use:
 ```javascript

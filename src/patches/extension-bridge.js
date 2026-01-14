@@ -1,11 +1,16 @@
 // Extension Bridge - Simple HTTP-based IPC
+window.ACP_DEBUG = {{ACP_DEBUG}};
+
 window.acpLog?.('INFO', "[ACP] Loading extension-bridge.js...");
 
 try {
   // Global logging function - sends logs to extension for file-based logging
   window.acpLog = (level, ...args) => {
+    if (level === 'DEBUG' && !window.ACP_DEBUG) return;
     const msg = args.join(' ');
-    console.log(`[ACP] ${msg}`); // Keep DevTools logging
+    if (window.ACP_DEBUG || level !== 'DEBUG') {
+      console.log(`[ACP] ${msg}`);
+    }
     fetch('http://localhost:37842/acp/log', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -62,7 +67,9 @@ try {
                 window.acpLog?.('INFO', '[ACP Bridge] Stream chunk:', data.type);
 
                 if (data.type === 'text' && callbacks.onTextChunk) {
-                  console.log(`[ACP Bridge] 📝 Received chunk seq=${data.seq} len=${data.content?.length} preview="${data.content?.slice(0, 30).replace(/\n/g, '\\n')}..."`);
+                  if (window.ACP_DEBUG) {
+                    console.log(`[ACP Bridge] 📝 Received chunk seq=${data.seq} len=${data.content?.length} preview="${data.content?.slice(0, 30).replace(/\n/g, '\\n')}..."`);
+                  }
                   fullText += data.content;
                   callbacks.onTextChunk(data.content);
                 } else if (data.type === 'tool' && callbacks.onToolCall) {
