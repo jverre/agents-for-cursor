@@ -2,7 +2,7 @@
   "name": "agents-for-cursor",
   "displayName": "Agents for Cursor (Claude Code)",
   "description": "Integrate Claude Code into Cursor",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "jverre",
   "icon": "docs/img/icon.png",
   "readme": "README.md",
