@@ -20,4 +20,5 @@ tests/e2e-user-data/
 *.AppImage
 *.exe
 
-.DS_Storetests/temp/
+.DS_Store
+tests/temp/
