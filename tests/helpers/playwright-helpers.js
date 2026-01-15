@@ -256,6 +256,48 @@ class CursorAutomation {
     }
   }
 
+  async selectMode(modeName, screenshotPrefix = '') {
+    const triggerSelector = '.composer-unified-dropdown[data-mode], [data-mode].composer-unified-dropdown';
+    const trigger = await this.mainWindow.waitForSelector(triggerSelector, { timeout: 5000 });
+    await trigger.click({ force: true });
+    await this.sleep(300);
+    if (screenshotPrefix) {
+      await this.screenshot(`${screenshotPrefix}a-mode-dropdown-opened.png`);
+    }
+
+    const modeSelectors = [
+      `.composer-unified-context-menu-item:has-text("${modeName}")`,
+      `.context-view .monaco-action-bar .action-item:has-text("${modeName}")`,
+      `text=${modeName}`
+    ];
+
+    let modeItem = null;
+    for (const selector of modeSelectors) {
+      modeItem = await this.mainWindow.$(selector);
+      if (modeItem) break;
+    }
+
+    if (!modeItem) {
+      modeItem = await this.mainWindow.waitForSelector(`text=${modeName}`, { timeout: 5000 });
+    }
+
+    await modeItem.click({ force: true });
+    await this.sleep(300);
+
+    await this.mainWindow.waitForFunction(
+      ({ selector, expected }) => {
+        const el = document.querySelector(selector);
+        const current = el?.getAttribute('data-mode');
+        return current && expected && current.toLowerCase() === expected.toLowerCase();
+      },
+      { selector: triggerSelector, expected: modeName }
+    );
+
+    if (screenshotPrefix) {
+      await this.screenshot(`${screenshotPrefix}b-mode-selected.png`);
+    }
+  }
+
   async sendChatMessage(message) {
     const chatInput = await this.mainWindow.waitForSelector(
       'div.aislash-editor-input[contenteditable="true"]',

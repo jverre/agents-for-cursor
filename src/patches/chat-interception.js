@@ -16,6 +16,41 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
       const composerHandle = this._composerDataService.getWeakHandleOptimistic({{e}});
       const modelName = {{n}}?.modelOverride || composerHandle?.data?.modelConfig?.modelName || '';
 
+      // Install plan payload logger (helps capture Auto model plan bubble format)
+      const installPlanLogger = () => {
+        if (window._acpPlanLoggerInstalled || !this._composerDataService) return;
+        window._acpPlanLoggerInstalled = true;
+        window._acpPlanLoggedBubbles = window._acpPlanLoggedBubbles || new Set();
+        const svc = this._composerDataService;
+        const originalUpdate = svc.updateComposerDataSetStore?.bind(svc);
+        if (!originalUpdate) return;
+        svc.updateComposerDataSetStore = (handle, updater) => {
+          const result = originalUpdate(handle, updater);
+          if (!window.ACP_DEBUG) return result;
+          try {
+            const map = handle?.data?.conversationMap;
+            if (!map) return result;
+            const inspectBubble = (bubbleId, bubble) => {
+              if (!bubble) return;
+              const hasPlanData = !!bubble.isPlanExecution || (Array.isArray(bubble.todos) && bubble.todos.length > 0);
+              if (hasPlanData && !window._acpPlanLoggedBubbles.has(bubbleId)) {
+                window._acpPlanLoggedBubbles.add(bubbleId);
+                window.acpLog?.('INFO', '[ACP] 🗂️ Plan bubble snapshot:', JSON.stringify({ bubbleId, bubble }, null, 2));
+              }
+            };
+            if (map.forEach) {
+              map.forEach((bubble, bubbleId) => inspectBubble(bubbleId, bubble));
+            } else {
+              Object.entries(map).forEach(([bubbleId, bubble]) => inspectBubble(bubbleId, bubble));
+            }
+          } catch (error) {
+            window.acpLog?.('ERROR', '[ACP] Plan logger error:', error);
+          }
+          return result;
+        };
+      };
+      installPlanLogger();
+
       // Track current model for slash command filtering
       if (window.acpSlashCommandIntegration?.setCurrentModel) {
         window.acpSlashCommandIntegration.setCurrentModel(modelName);
@@ -94,7 +129,55 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
 
           // Simple state: accumulate text, track tool bubbles and their types
           const stateKey = `_acp_${composerId}`;
-          window[stateKey] = { text: '', bubbleId: responseBubbleId, toolBubbles: new Map() };
+          window[stateKey] = { text: '', bubbleId: responseBubbleId, toolBubbles: new Map(), planBubbleId: null, planToolCallId: null };
+
+          const composerData = composerHandle?.data || {};
+          const uiMode = document?.querySelector?.('.composer-unified-dropdown[data-mode]')?.getAttribute('data-mode');
+          const mapUnifiedMode = (modeValue) => {
+            if (modeValue === 0) return 'default';
+            if (modeValue === 1) return 'acceptEdits';
+            if (modeValue === 2) return 'plan';
+            return null;
+          };
+
+          let requestedModeId =
+            {{n}}?.modeId ||
+            {{n}}?.currentModeId ||
+            {{n}}?.mode?.id ||
+            {{n}}?.mode?.modeId ||
+            {{n}}?.mode?.name ||
+            composerData?.currentModeId ||
+            composerData?.modeId ||
+            composerData?.mode?.id ||
+            composerData?.mode?.name ||
+            composerData?.unifiedMode;
+
+          if (typeof requestedModeId === 'number') {
+            requestedModeId = mapUnifiedMode(requestedModeId);
+          }
+
+          if (!requestedModeId && typeof composerData?.unifiedMode === 'number') {
+            requestedModeId = mapUnifiedMode(composerData.unifiedMode);
+          }
+
+          if (!requestedModeId && uiMode) {
+            requestedModeId = uiMode;
+          }
+
+          window.acpLog?.(
+            'INFO',
+            '[ACP] Mode fields:',
+            'reqModeId=',
+            requestedModeId,
+            'unifiedMode=',
+            composerData?.unifiedMode,
+            'currentModeId=',
+            composerData?.currentModeId,
+            'modeId=',
+            composerData?.modeId,
+            'uiMode=',
+            uiMode
+          );
 
           const acpResponse = await window.acpExtensionBridge.sendMessage(
             provider,
@@ -1548,7 +1631,82 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                   }
                 }
               }
+              ,
+              onPlan: (planUpdate) => {
+                const s = window[stateKey];
+                const entries = planUpdate?.entries || [];
+                if (!Array.isArray(entries) || entries.length === 0) return;
+
+                const normalizeStatus = (status) => {
+                  if (!status) return 'pending';
+                  const raw = `${status}`.toLowerCase();
+                  if (raw.includes('in_progress') || raw.includes('in-progress') || raw.includes('doing')) return 'in_progress';
+                  if (raw.includes('complete') || raw.includes('done') || raw.includes('finished')) return 'completed';
+                  if (raw.includes('pending') || raw.includes('todo') || raw.includes('backlog')) return 'pending';
+                  return status;
+                };
+
+                const todos = entries.map((entry, idx) => {
+                  if (typeof entry === 'string') {
+                    return { id: `plan_${idx + 1}`, content: entry, status: 'pending' };
+                  }
+                  const content = entry?.content || entry?.text || entry?.title || '';
+                  const status = normalizeStatus(entry?.status || entry?.state || (entry?.completed ? 'completed' : null));
+                  return {
+                    id: entry?.id || entry?.todoId || entry?.key || `plan_${idx + 1}`,
+                    content,
+                    status
+                  };
+                }).filter(t => t.content);
+
+                if (todos.length === 0) return;
+
+                if (!s.planBubbleId) {
+                  const planBubbleId = gen();
+                  s.planBubbleId = planBubbleId;
+                  s.planToolCallId = `plan_${planBubbleId}`;
+
+                  const toolBubble = {
+                    bubbleId: planBubbleId,
+                    type: 2,
+                    text: '',
+                    richText: '',
+                    codeBlocks: [],
+                    createdAt: Date.now(),
+                    capabilityType: 'agentic'
+                  };
+
+                  window.acpLog?.('INFO', '[ACP] 🗂️ Creating PLAN bubble:', s.planToolCallId, 'todos:', todos.length);
+                  svc.appendComposerBubbles(composerHandle, [toolBubble]);
+                }
+
+                const rawArgs = { todos };
+                svc.updateComposerDataSetStore({{e}}, u => {
+                  u("conversationMap", s.planBubbleId, "toolFormerData", {
+                    type: TODO_WRITE_TYPE,
+                    tool: TODO_WRITE_TYPE,
+                    toolCallId: s.planToolCallId,
+                    status: 'completed',
+                    requestId: s.planBubbleId,
+                    rawArgs: JSON.stringify(rawArgs),
+                    params: rawArgs
+                  });
+                  u("conversationMap", s.planBubbleId, "isPlanExecution", true);
+                  u("conversationMap", s.planBubbleId, "todos", todos);
+                });
+              },
+              onMode: (modeUpdate) => {
+                const currentModeId = modeUpdate?.currentModeId;
+                if (!currentModeId) return;
+                window.acpLog?.('INFO', '[ACP] 🧭 Current mode updated:', currentModeId);
+                svc.updateComposerDataSetStore({{e}}, u => {
+                  u("currentModeId", currentModeId);
+                  u("modeId", currentModeId);
+                });
+              }
             }
+            ,
+            { modeId: requestedModeId }
           );
 
           if (acpResponse.error) {

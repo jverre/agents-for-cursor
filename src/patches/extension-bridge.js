@@ -21,9 +21,10 @@ try {
   // Simple bridge using HTTP localhost communication
   // Extension will run a local server on port 37842
 
-  window.acpExtensionBridge = {
-    async sendMessage(provider, message, composerId, callbacks) {
-      window.acpLog?.('INFO', '[ACP Bridge] sendMessage called with provider:', provider.id, 'composerId:', composerId);
+  const installAcpExtensionBridge = () => {
+    window.acpExtensionBridge = {
+      async sendMessage(provider, message, composerId, callbacks, options = {}) {
+        window.acpLog?.('INFO', '[ACP Bridge] sendMessage called with provider:', provider.id, 'composerId:', composerId);
 
       try {
         const response = await fetch('http://localhost:37842/acp/sendMessage', {
@@ -35,7 +36,8 @@ try {
             provider: provider,
             message: message,
             composerId: composerId,
-            stream: !!callbacks  // Enable streaming if callbacks provided
+            stream: !!callbacks,  // Enable streaming if callbacks provided
+            modeId: options.modeId
           })
         });
 
@@ -75,6 +77,12 @@ try {
                 } else if (data.type === 'tool' && callbacks.onToolCall) {
                   window.acpLog?.('INFO', '[ACP Bridge] 🔧 Tool event:', data.sessionUpdate, '| id:', data.toolCallId?.slice(0, 8), '| status:', data.status, '| kind:', data.kind);
                   callbacks.onToolCall(data);
+                } else if (data.type === 'plan' && callbacks.onPlan) {
+                  window.acpLog?.('INFO', '[ACP Bridge] 🗂️ Plan update received:', data.entries?.length || 0);
+                  callbacks.onPlan(data);
+                } else if (data.type === 'mode' && callbacks.onMode) {
+                  window.acpLog?.('INFO', '[ACP Bridge] 🧭 Mode update received:', data.currentModeId);
+                  callbacks.onMode(data);
                 } else if (data.type === 'done') {
                   window.acpLog?.('INFO', '[ACP Bridge] ✅ Stream done marker received');
                 }
@@ -104,8 +112,8 @@ try {
       }
     },
 
-    async getSlashCommands(providerId) {
-      window.acpLog?.('INFO', '[ACP Bridge] getSlashCommands called for provider:', providerId);
+      async getSlashCommands(providerId) {
+        window.acpLog?.('INFO', '[ACP Bridge] getSlashCommands called for provider:', providerId);
 
       try {
         const response = await fetch(`http://localhost:37842/acp/getSlashCommands?providerId=${encodeURIComponent(providerId)}`);
@@ -124,8 +132,8 @@ try {
       }
     },
 
-    async initSession(provider) {
-      window.acpLog?.('INFO', '[ACP Bridge] initSession called for provider:', provider.id);
+      async initSession(provider) {
+        window.acpLog?.('INFO', '[ACP Bridge] initSession called for provider:', provider.id);
 
       try {
         const response = await fetch('http://localhost:37842/acp/initSession', {
@@ -151,8 +159,8 @@ try {
     },
 
     // Get or create session for a composer (fast, no slash command wait)
-    async getSession(provider, composerId) {
-      window.acpLog?.('INFO', '[ACP Bridge] getSession called for provider:', provider.id, 'composerId:', composerId);
+      async getSession(provider, composerId) {
+        window.acpLog?.('INFO', '[ACP Bridge] getSession called for provider:', provider.id, 'composerId:', composerId);
 
       try {
         const response = await fetch('http://localhost:37842/acp/getSession', {
@@ -173,8 +181,13 @@ try {
         window.acpLog?.('ERROR', '[ACP Bridge] Error getting session:', error);
         return { error: true, message: error.message };
       }
-    }
+      }
+    };
   };
+
+  installAcpExtensionBridge();
+  // Ensure latest bridge implementation wins even if older patches run later
+  setTimeout(installAcpExtensionBridge, 0);
 
   window.acpLog?.('INFO', "[ACP] Extension bridge installed - using HTTP on localhost:37842");
 
