@@ -4,6 +4,17 @@ on:
   release:
     types:
       - created
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: 'Version bump for package.json'
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
 
 jobs:
   publish:
@@ -15,6 +26,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -25,6 +38,36 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Configure git
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version and tag
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          npm version ${{ inputs.version_bump }} -m "chore(release): %s"
+          git push --follow-tags
+
+      - name: Resolve release tag
+        id: release_tag
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=$(git describe --tags --abbrev=0)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Ensure GitHub release exists
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! gh release view "${{ steps.release_tag.outputs.tag }}" >/dev/null 2>&1; then
+            gh release create "${{ steps.release_tag.outputs.tag }}" --generate-notes
+          fi
 
       - name: Package Extension
         run: npm run package
@@ -37,7 +80,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload ${{ github.event.release.tag_name }} ./${{ steps.get_filename.outputs.filename }} --clobber
+          gh release upload ${{ steps.release_tag.outputs.tag }} ./${{ steps.get_filename.outputs.filename }} --clobber
 
       - name: Publish Extension to Open VSX
         if: ${{ vars.PUBLISH_TO_OVSX == 'true' }}
