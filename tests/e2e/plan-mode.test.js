@@ -26,16 +26,6 @@ describe('E2E: Claude Code (ACP) Plan Mode', () => {
 
     await cursor.selectModel('Claude Code (ACP)', '12-plan-mode-3');
     // Open mode dropdown and verify Ask/Debug are hidden for ACP
-    await cursor.mainWindow.evaluate(() => {
-      const candidates = [
-        document.querySelector('.composer-unified-dropdown-model'),
-        document.querySelector('[data-testid="composer-model"]'),
-        document.querySelector('.composer-unified-dropdown-model .monaco-highlighted-label'),
-        document.querySelector('.composer-unified-dropdown-model span')
-      ].filter(Boolean);
-      return candidates.map(el => (el.textContent || '').trim()).find(text => text) || '';
-    });
-
     await cursor.mainWindow.click(
       '.composer-unified-dropdown[data-mode], [data-mode].composer-unified-dropdown',
       { force: true }
