@@ -1,5 +1,5 @@
 // ACP Service - Provider Management
-console.log("[ACP] Loading ACP Service...");
+window.acpLog?.('INFO', "[ACP] Loading ACP Service...");
 
 try {
   class ACPService {
@@ -7,7 +7,7 @@ try {
       this.providers = new Map();
       this.sessions = new Map();
       this.slashCommands = new Map(); // Map<providerId, AvailableCommand[]>
-      console.log("[ACP] ACPService initialized");
+      window.acpLog?.('INFO', "[ACP] ACPService initialized");
 
       // Add test provider (will load from config file later)
       this.addTestProvider();
@@ -33,7 +33,7 @@ try {
       };
 
       this.providers.set('claude-code', testProvider);
-      console.log("[ACP] Added test provider:", testProvider.id);
+      window.acpLog?.('INFO', "[ACP] Added test provider:", testProvider.id);
       // Note: Slash commands are lazy-loaded when user types '/' in composer
     }
 
@@ -51,21 +51,21 @@ try {
     async initSession(providerId) {
       const provider = this.getProvider(providerId);
       if (!provider) {
-        console.error('[ACP] No provider found for:', providerId);
+        window.acpLog?.('ERROR', '[ACP] No provider found for:', providerId);
         return [];
       }
 
       if (window.acpExtensionBridge && window.acpExtensionBridge.initSession) {
         try {
-          console.log('[ACP] Initializing session for:', providerId);
+          window.acpLog?.('INFO', '[ACP] Initializing session for:', providerId);
           const result = await window.acpExtensionBridge.initSession(provider);
           if (result.commands) {
             this.slashCommands.set(providerId, result.commands);
-            console.log('[ACP] Got slash commands from init:', result.commands.length);
+            window.acpLog?.('INFO', '[ACP] Got slash commands from init:', result.commands.length);
           }
           return result.commands || [];
         } catch (error) {
-          console.error('[ACP] Error initializing session:', error);
+          window.acpLog?.('ERROR', '[ACP] Error initializing session:', error);
           return [];
         }
       }
@@ -78,10 +78,10 @@ try {
         try {
           const commands = await window.acpExtensionBridge.getSlashCommands(providerId);
           this.slashCommands.set(providerId, commands);
-          console.log('[ACP] Fetched slash commands for', providerId, ':', commands.length, 'commands');
+          window.acpLog?.('INFO', '[ACP] Fetched slash commands for', providerId, ':', commands.length, 'commands');
           return commands;
         } catch (error) {
-          console.error('[ACP] Error fetching slash commands:', error);
+          window.acpLog?.('ERROR', '[ACP] Error fetching slash commands:', error);
           return [];
         }
       }
@@ -95,8 +95,8 @@ try {
 
     // Handle ACP request (called from chat-patch.js)
     async handleRequest(modelName, message, composerId) {
-      console.log('[ACP] Handling request for model:', modelName, 'composerId:', composerId);
-      console.log('[ACP] Message:', message);
+      window.acpLog?.('INFO', '[ACP] Handling request for model:', modelName, 'composerId:', composerId);
+      window.acpLog?.('INFO', '[ACP] Message:', message);
 
       // Extract provider ID from model name
       // "Claude Code (ACP)" -> "claude-code"
@@ -106,7 +106,7 @@ try {
       const provider = this.getProvider(providerId);
 
       if (!provider) {
-        console.error('[ACP] No provider found for:', providerId);
+        window.acpLog?.('ERROR', '[ACP] No provider found for:', providerId);
         return {
           error: true,
           message: `ACP provider "${providerId}" not found`
@@ -114,18 +114,18 @@ try {
       }
 
       try {
-        console.log('[ACP] Checking for extension bridge...');
+        window.acpLog?.('INFO', '[ACP] Checking for extension bridge...');
 
         // Check if extension bridge is available
         if (window.acpExtensionBridge && window.acpExtensionBridge.sendMessage) {
-          console.log('[ACP] Extension bridge found, calling sendMessage...');
+          window.acpLog?.('INFO', '[ACP] Extension bridge found, calling sendMessage...');
           const response = await window.acpExtensionBridge.sendMessage(provider, message, composerId);
-          console.log('[ACP] Got response from extension:', response);
+          window.acpLog?.('INFO', '[ACP] Got response from extension:', response);
           return response;
         } else {
           // Fallback to mock if extension bridge not available
-          console.warn('[ACP] Extension bridge not available, using mock response');
-          console.warn('[ACP] window.acpExtensionBridge =', window.acpExtensionBridge);
+          window.acpLog?.('WARN', '[ACP] Extension bridge not available, using mock response');
+          window.acpLog?.('WARN', '[ACP] window.acpExtensionBridge =', window.acpExtensionBridge);
           return {
             id: 'acp-' + Date.now(),
             object: 'chat.completion',
@@ -147,7 +147,7 @@ try {
           };
         }
       } catch (error) {
-        console.error('[ACP] Error calling extension:', error);
+        window.acpLog?.('ERROR', '[ACP] Error calling extension:', error);
         return {
           error: true,
           message: `ACP error: ${error.message}`
@@ -169,16 +169,16 @@ try {
   // Create global ACP service instance
   if (!window.acpService) {
     window.acpService = new ACPService();
-    console.log("[ACP] ACP Service ready - window.acpService available");
-    console.log("[ACP] Try: window.acpService.getProviders()");
-    console.log("[ACP] Try: window.acpService.enable() to enable ACP routing");
+    window.acpLog?.('INFO', "[ACP] ACP Service ready - window.acpService available");
+    window.acpLog?.('INFO', "[ACP] Try: window.acpService.getProviders()");
+    window.acpLog?.('INFO', "[ACP] Try: window.acpService.enable() to enable ACP routing");
   } else {
-    console.log("[ACP] ACP Service already exists");
+    window.acpLog?.('INFO', "[ACP] ACP Service already exists");
   }
 
   // ACP routing is automatic based on model name prefix "acp:"
-  console.log('[ACP] 🟢 ACP routing ready - models starting with "acp:" will use ACP providers');
-  console.log('[ACP] 🔵 All other models will use normal Cursor backend');
+  window.acpLog?.('INFO', '[ACP] 🟢 ACP routing ready - models starting with "acp:" will use ACP providers');
+  window.acpLog?.('INFO', '[ACP] 🔵 All other models will use normal Cursor backend');
 
 } catch (error) {
   console.error("[ACP] FATAL ERROR loading ACP Service:", error);

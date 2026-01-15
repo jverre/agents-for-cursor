@@ -591,6 +591,144 @@ Tables:
 - `ItemTable` - General VS Code state
 - `cursorDiskKV` - Cursor-specific data including bubbles
 
+## Debugging Tool Format Issues
+
+When implementing a new tool or debugging why a tool isn't rendering correctly, you can use this technique to see exactly what data Cursor expects vs what you're sending.
+
+### 1. Debug Cursor's Expected Format
+
+Inject an alert into the workbench file to see what Cursor's UI receives:
+
+**File:** `/Applications/Cursor.app/Contents/Resources/app/out/vs/workbench/workbench.desktop.main.js`
+
+**Steps:**
+1. Backup the workbench file first:
+   ```bash
+   cp workbench.desktop.main.js workbench.desktop.main.js.backup
+   ```
+
+2. Find the injection point by searching for this pattern:
+   ```javascript
+   const a=e.getComposerBubble(t,o.bubbleId);
+   ```
+
+3. Inject alert code right after that line:
+   ```javascript
+   if(a&&a.toolFormerData&&a.toolFormerData.tool===38){
+     alert("EDIT TOOL 38 DATA:"+JSON.stringify(a.toolFormerData,null,2).substring(0,800));
+   }
+   ```
+   Replace `38` with your tool type ID.
+
+4. Using Node.js to automate injection:
+   ```javascript
+   const fs = require('fs');
+   let content = fs.readFileSync('workbench.desktop.main.js', 'utf8');
+
+   const pattern = 'const a=e.getComposerBubble(t,o.bubbleId);';
+   const idx = content.indexOf(pattern);
+
+   if (idx > -1) {
+     const afterPattern = idx + pattern.length;
+     const injectCode = 'if(a&&a.toolFormerData&&a.toolFormerData.tool===38){alert("EDIT TOOL 38 DATA:"+JSON.stringify(a.toolFormerData,null,2).substring(0,800));}';
+
+     content = content.substring(0, afterPattern) + injectCode + content.substring(afterPattern);
+     fs.writeFileSync('workbench.desktop.main.js', content);
+   }
+   ```
+
+5. **Restart Cursor completely** (Cmd+Q then relaunch) to pick up the modified file
+
+6. Trigger the tool - you'll see alert popups showing Cursor's expected format
+
+7. Restore from backup when done:
+   ```bash
+   cp workbench.desktop.main.js.backup workbench.desktop.main.js
+   ```
+
+### 2. Debug ACP's Sent Format
+
+Add alerts in your chat interception code to see what data ACP is sending:
+
+**File:** `src/patches/chat-interception.js`
+
+**Add these alerts in your tool handler:**
+
+```javascript
+// At tool detection
+if (isEditTool) {
+  alert("EDIT TOOL FULL EVENT: " + JSON.stringify(tc, null, 2).substring(0, 500));
+  alert("EDIT TOOL DETECTED: " + JSON.stringify({
+    kind: tc.kind,
+    sessionUpdate: tc.sessionUpdate,
+    status: tc.status,
+    isNew: isNew,
+    hasFilePath: !!inputObj.file_path,
+    hasBubble: s.toolBubbles.has(toolCallId),
+    inputObj: inputObj
+  }));
+}
+
+// Before creating bubble
+alert("CREATING BUBBLE WITH DATA: " + JSON.stringify(toolData, null, 2));
+
+// After creating bubble
+alert("FINAL BUBBLE: " + JSON.stringify(toolBubble, null, 2).substring(0, 1000));
+```
+
+### 3. Comparing Formats
+
+Use both techniques together:
+1. First, see what Cursor expects (workbench alert)
+2. Then, see what you're sending (chat-interception alert)
+3. Match your `toolFormerData` structure to Cursor's expected format
+
+**Example comparison:**
+
+Cursor expects (from workbench alert):
+```json
+{
+  "tool": 38,
+  "toolCallId": "tool_xxx",
+  "toolIndex": 0,
+  "modelCallId": "",
+  "status": "loading",
+  "name": "edit_file_v2",
+  "params": {
+    "relativeWorkspacePath": "/src/file.js",
+    "shouldSendBackLinterErrors": false,
+    "resultForModel": "",
+    "noCodeblock": true,
+    "cloudAgentEdit": false
+  },
+  "additionalData": {}
+}
+```
+
+You were sending (from chat-interception alert):
+```json
+{
+  "tool": 38,
+  "toolCallId": "toolu_xxx",
+  "status": "loading",
+  "name": "search_replace",  // ❌ Wrong name
+  "params": {
+    "relativeWorkspacePath": "/src/file.js"
+    // ❌ Missing other required fields
+  }
+  // ❌ Missing toolIndex, modelCallId, additionalData
+}
+```
+
+Fix: Update your code to match Cursor's format exactly.
+
+### 4. Common Issues Found
+
+- **Missing fields**: Cursor often requires fields even if they're empty (`modelCallId: ""`)
+- **Wrong tool name**: Must match exactly what Cursor uses (`edit_file_v2` not `search_replace`)
+- **Missing params fields**: Each tool has specific required params
+- **Wrong data types**: Objects vs strings, numbers vs strings
+
 ## Related Documentation
 
 - [Cursor Chat Rendering System](./cursor-chat-rendering-system.md) - How Cursor renders these bubbles in the UI, component hierarchy, and how to add new tool types

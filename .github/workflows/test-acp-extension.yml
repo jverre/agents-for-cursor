@@ -39,6 +39,8 @@ jobs:
         run: xvfb-run --auto-servernum npm run test:e2e
         env:
           CI: true
+          # CI mode uses system Cursor installation (non-isolated)
+          # LOCAL mode would use isolated installation at ~/.cursor-test-installation
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           CURSOR_AUTH_TOKEN: ${{ secrets.CURSOR_AUTH_TOKEN }}
           CURSOR_EMAIL: ${{ secrets.CURSOR_EMAIL }}

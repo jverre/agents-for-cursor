@@ -1,6 +1,59 @@
 const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
+
+/**
+ * Get the path to the system Cursor's state database
+ */
+function getSystemCursorDbPath() {
+  const platform = os.platform();
+  switch (platform) {
+    case 'darwin':
+      return path.join(os.homedir(), 'Library', 'Application Support', 'Cursor', 'User', 'globalStorage', 'state.vscdb');
+    case 'linux':
+      return path.join(os.homedir(), '.config', 'Cursor', 'User', 'globalStorage', 'state.vscdb');
+    case 'win32':
+      return path.join(process.env.APPDATA || '', 'Cursor', 'User', 'globalStorage', 'state.vscdb');
+    default:
+      return null;
+  }
+}
+
+/**
+ * Extract auth tokens from the system Cursor installation
+ */
+function extractAuthFromSystemCursor() {
+  const dbPath = getSystemCursorDbPath();
+  
+  if (!dbPath || !fs.existsSync(dbPath)) {
+    console.log('System Cursor database not found at:', dbPath);
+    return null;
+  }
+
+  try {
+    const db = new Database(dbPath, { readonly: true });
+    const stmt = db.prepare('SELECT key, value FROM ItemTable WHERE key LIKE ?');
+    const rows = stmt.all('cursorAuth/%');
+    db.close();
+
+    if (rows.length === 0) {
+      console.log('No auth tokens found in system Cursor');
+      return null;
+    }
+
+    const auth = {};
+    for (const row of rows) {
+      auth[row.key] = row.value;
+    }
+
+    console.log('Extracted auth from system Cursor:', Object.keys(auth).join(', '));
+    return auth;
+  } catch (error) {
+    console.log('Failed to extract auth from system Cursor:', error.message);
+    return null;
+  }
+}
 
 function setupTestAuth() {
   const userDataDir = path.join(__dirname, '..', 'e2e-user-data');
@@ -57,24 +110,46 @@ function setupTestAuth() {
   }
   console.log('Onboarding skip flags configured');
 
-  // Add auth tokens if provided
-  const authToken = process.env.CURSOR_AUTH_TOKEN;
-  if (authToken) {
-    const authData = {
-      'cursorAuth/accessToken': authToken,
-      'cursorAuth/refreshToken': authToken,
-      'cursorAuth/cachedEmail': process.env.CURSOR_EMAIL || 'test@example.com',
-      'cursorAuth/stripeMembershipType': 'free',
-      'cursorAuth/stripeSubscriptionStatus': 'active',
-      'cursorAuth/cachedSignUpType': 'Google'
-    };
+  // Determine auth source: env var, or extract from system Cursor (for local dev)
+  const isLocal = process.env.LOCAL === 'true';
+  let authToken = process.env.CURSOR_AUTH_TOKEN;
+  let authEmail = process.env.CURSOR_EMAIL;
+  let systemAuth = null;
 
-    for (const [key, value] of Object.entries(authData)) {
-      stmt.run(key, value);
+  // For local development, try to extract auth from system Cursor if not provided
+  if (isLocal && !authToken) {
+    systemAuth = extractAuthFromSystemCursor();
+    if (systemAuth) {
+      authToken = systemAuth['cursorAuth/accessToken'];
+      authEmail = systemAuth['cursorAuth/cachedEmail'];
     }
-    console.log('Auth tokens configured');
+  }
+
+  if (authToken) {
+    // If we have system auth, use all the extracted values
+    if (systemAuth) {
+      for (const [key, value] of Object.entries(systemAuth)) {
+        stmt.run(key, value);
+      }
+      console.log('Auth tokens copied from system Cursor');
+    } else {
+      // Otherwise use env vars
+      const authData = {
+        'cursorAuth/accessToken': authToken,
+        'cursorAuth/refreshToken': authToken,
+        'cursorAuth/cachedEmail': authEmail || 'test@example.com',
+        'cursorAuth/stripeMembershipType': 'free',
+        'cursorAuth/stripeSubscriptionStatus': 'active',
+        'cursorAuth/cachedSignUpType': 'Google'
+      };
+
+      for (const [key, value] of Object.entries(authData)) {
+        stmt.run(key, value);
+      }
+      console.log('Auth tokens configured from environment');
+    }
   } else {
-    console.log('CURSOR_AUTH_TOKEN not set, skipping auth setup');
+    console.log('No auth tokens available (set CURSOR_AUTH_TOKEN or run with LOCAL=true to extract from system Cursor)');
   }
 
   db.close();

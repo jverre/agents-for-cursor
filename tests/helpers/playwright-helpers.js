@@ -1,16 +1,57 @@
 const { _electron: electron } = require('playwright');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const CursorInstaller = require('./cursor-installer');
 
+// ACP log file path (same as extension.js)
+const ACP_LOG_PATH = path.join(os.homedir(), '.cursor-acp.log');
+
 class CursorAutomation {
+  /**
+   * @param {Object} options - Configuration options
+   * @param {string} options.extensionPath - Path to the extension source
+   * @param {string} options.userDataDir - Path to user data directory
+   * @param {boolean} options.useIsolated - Use isolated Cursor installation for testing
+   */
   constructor(options = {}) {
-    this.installer = new CursorInstaller();
+    // Use isolated installation for LOCAL mode, system installation for CI
+    const isLocal = process.env.LOCAL === 'true';
+    this.useIsolated = options.useIsolated !== undefined ? options.useIsolated : isLocal;
+    this.installer = new CursorInstaller({ useIsolated: this.useIsolated });
     this.extensionPath = options.extensionPath || path.join(__dirname, '..', '..');
     this.userDataDir = options.userDataDir || path.join(__dirname, '..', 'e2e-user-data');
     this.electronApp = null;
     this.mainWindow = null;
     this.logFile = null;
+  }
+
+  /**
+   * Get the Cursor app root path (where workbench files live)
+   */
+  getCursorAppRoot() {
+    return this.installer.getCursorResourcesPath();
+  }
+
+  /**
+   * Check if patches are currently applied by looking for ACP token in workbench files
+   */
+  async arePatchesApplied() {
+    const appRoot = this.getCursorAppRoot();
+    const packageJson = require('../../package.json');
+    const token = `/* ACP_PATCH_${packageJson.version} */`;
+    
+    try {
+      const workbenchPath = path.join(appRoot, 'out/vs/code/electron-sandbox/workbench/workbench.js');
+      const mainWorkbenchPath = path.join(appRoot, 'out/vs/workbench/workbench.desktop.main.js');
+      
+      const content = fs.readFileSync(workbenchPath, 'utf8');
+      const mainContent = fs.readFileSync(mainWorkbenchPath, 'utf8');
+      
+      return content.includes(token) && mainContent.includes(token);
+    } catch {
+      return false;
+    }
   }
 
   setupLogCapture() {
@@ -28,7 +69,7 @@ class CursorAutomation {
 
   async launch() {
     // Kill any lingering Cursor processes before launching (important on Linux CI)
-    if (process.platform === 'linux') {
+    if (process.platform === 'linux' && process.env.CI === 'true') {
       const { exec } = require('child_process');
       // Target the actual Cursor executable path, not the test directory
       await new Promise(resolve => {
@@ -97,12 +138,33 @@ class CursorAutomation {
     await this.executeCommand('Agents for Cursor: Enable', '0-setup-2');
     await this.screenshot('0-setup-3-after-acp-enable-command.png');
 
-    // Wait for patches to be applied (need more time for the command to complete)
-    console.log('[Test] Waiting 5 seconds for patches to be applied...');
-    await this.sleep(5000);
-    await this.screenshot('0-setup-4-after-wait-5s.png');
+    // Wait for patches to be applied, but handle case where Cursor exits on its own
+    console.log('[Test] Waiting for patches to be applied (max 15 seconds)...');
+    
+    // Poll to check if app is still running, with timeout
+    const startTime = Date.now();
+    const maxWait = 15000;
+    
+    while (Date.now() - startTime < maxWait) {
+      await this.sleep(1000);
+      
+      // Check if app is still running
+      try {
+        const isRunning = this.electronApp && !this.electronApp.process()?.killed;
+        if (!isRunning) {
+          console.log('[Test] Cursor exited after enable command (expected behavior)');
+          break;
+        }
+      } catch (e) {
+        // App process check failed, likely exited
+        console.log('[Test] Cursor process no longer accessible');
+        break;
+      }
+    }
+    
+    await this.screenshot('0-setup-4-after-wait.png').catch(() => {});
 
-    // Restart to apply patches
+    // Restart to apply patches (handles case where app already exited)
     await this.restart();
   }
 
@@ -121,26 +183,10 @@ class CursorAutomation {
   }
 
   async restart() {
-    if (this.electronApp) {
-      await this.electronApp.close().catch(() => {});
-    }
-
-    await this.sleep(2000);
-
-    const executablePath = this.installer.getCursorExecutablePath();
-
-    this.electronApp = await electron.launch({
-      executablePath,
-      args: [
-        `--user-data-dir=${this.userDataDir}`,
-        `--extensionDevelopmentPath=${this.extensionPath}`,
-        '--no-sandbox',
-        '--disable-gpu'
-      ]
-    });
-
-    this.mainWindow = await this.electronApp.firstWindow();
-    this.setupLogCapture();
+    console.log('[Test] Restarting Cursor...');
+    await this.close();
+    await this.launch();
+    console.log('[Test] Cursor restarted successfully');
   }
 
   async openChat() {
@@ -326,27 +372,84 @@ class CursorAutomation {
 
   async close() {
     if (this.electronApp) {
-      await this.electronApp.close().catch(() => {});
+      const { exec } = require('child_process');
+      
+      // Try graceful close with timeout
+      const closePromise = this.electronApp.close().catch(() => {});
+      const timeoutPromise = this.sleep(5000).then(() => 'timeout');
+      
+      const result = await Promise.race([closePromise, timeoutPromise]);
+      
+      if (result === 'timeout') {
+        console.log('[CursorAutomation] Graceful close timed out, force killing...');
+        // Force kill the process
+        try {
+          const pid = this.electronApp.process()?.pid;
+          if (pid) {
+            process.kill(pid, 'SIGKILL');
+          }
+        } catch (e) {
+          // Process may already be dead
+        }
+      }
+      
       this.electronApp = null;
       this.mainWindow = null;
 
-      // Wait for process to fully terminate (important on Linux CI)
-      await this.sleep(3000);
+      // Kill lingering processes only for isolated installs, or on Linux CI
+      const shouldKillByPattern = this.useIsolated || (process.platform === 'linux' && process.env.CI === 'true');
+      if (shouldKillByPattern) {
+        const killPattern = this.useIsolated
+          ? '.cursor-test-installation'
+          : '.local/share/Cursor';
 
-      // Kill any lingering Cursor processes on Linux
-      if (process.platform === 'linux') {
-        const { exec } = require('child_process');
-        // Target the actual Cursor executable path, not the test directory
         await new Promise(resolve => {
-          exec('pkill -9 -f ".local/share/Cursor" || true', () => resolve());
+          if (process.platform === 'win32') {
+            exec('taskkill /F /IM Cursor.exe 2>nul', () => resolve());
+          } else {
+            exec(`pkill -9 -f "${killPattern}" 2>/dev/null || true`, () => resolve());
+          }
         });
-        await this.sleep(1000);
       }
+      
+      // Brief wait for cleanup
+      await this.sleep(500);
     }
   }
 
   sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Get the contents of the ACP log file
+   * @returns {string} Log file contents, or empty string if file doesn't exist
+   */
+  getAcpLogs() {
+    try {
+      return fs.existsSync(ACP_LOG_PATH) ? fs.readFileSync(ACP_LOG_PATH, 'utf8') : '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  /**
+   * Clear the ACP log file
+   */
+  clearAcpLogs() {
+    try {
+      fs.writeFileSync(ACP_LOG_PATH, '');
+    } catch (e) {
+      // Ignore errors
+    }
+  }
+
+  /**
+   * Get the path to the ACP log file
+   * @returns {string} Path to the log file
+   */
+  getAcpLogPath() {
+    return ACP_LOG_PATH;
   }
 }
 

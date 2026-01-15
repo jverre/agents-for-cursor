@@ -6,17 +6,47 @@ const download = require('download');
 
 /**
  * Cursor Installer - Downloads and installs Cursor for testing
+ * 
+ * @param {Object} options - Configuration options
+ * @param {string} options.installDir - Custom installation directory (for isolated testing)
+ * @param {boolean} options.useIsolated - If true, uses ~/.cursor-test-installation instead of system default
  */
 class CursorInstaller {
-  constructor() {
+  constructor(options = {}) {
     this.platform = os.platform();
     this.arch = os.arch();
     this.cacheDir = path.join(os.homedir(), '.cursor-test-cache');
-    this.installDir = this.getDefaultInstallDir();
+    
+    // Determine installation directory
+    if (options.installDir) {
+      this.installDir = options.installDir;
+    } else if (options.useIsolated) {
+      this.installDir = this.getIsolatedInstallDir();
+    } else {
+      this.installDir = this.getDefaultInstallDir();
+    }
 
     // Ensure cache directory exists
     if (!fs.existsSync(this.cacheDir)) {
       fs.mkdirSync(this.cacheDir, { recursive: true });
+    }
+  }
+
+  /**
+   * Get the isolated installation directory for testing
+   * This keeps the test Cursor completely separate from the system installation
+   */
+  getIsolatedInstallDir() {
+    const baseDir = path.join(os.homedir(), '.cursor-test-installation');
+    switch (this.platform) {
+      case 'darwin':
+        return path.join(baseDir, 'Cursor.app');
+      case 'linux':
+        return path.join(baseDir, 'cursor');
+      case 'win32':
+        return path.join(baseDir, 'Cursor');
+      default:
+        throw new Error(`Unsupported platform: ${this.platform}`);
     }
   }
 
@@ -38,26 +68,38 @@ class CursorInstaller {
 
   /**
    * Get the download URL for Cursor
-   * Using the working Cursor API v2 endpoint
+   * Uses the official Cursor download API
    */
-  getDownloadUrl() {
-    // Use Cursor API v2 endpoints with known working version
-    const baseUrl = 'https://api2.cursor.sh/updates/download/golden';
-    const version = '2.2';  // Known working version
-
+  async getDownloadUrl() {
+    const fetch = require('node-fetch');
+    
+    // Determine platform string for API
+    let platform;
     switch (this.platform) {
       case 'darwin':
-        // macOS - DMG for x64 (Intel/Rosetta)
-        return `${baseUrl}/mac-x64/cursor/${version}`;
+        platform = 'darwin-universal';
+        break;
       case 'linux':
-        // Linux - AppImage for x64
-        return `${baseUrl}/linux-x64/cursor/${version}`;
+        platform = this.arch === 'arm64' ? 'linux-arm64' : 'linux-x64';
+        break;
       case 'win32':
-        // Windows - NSIS installer for x64
-        return `${baseUrl}/windows-x64/cursor/${version}`;
+        platform = this.arch === 'arm64' ? 'windows-arm64' : 'windows-x64';
+        break;
       default:
         throw new Error(`Unsupported platform: ${this.platform}`);
     }
+
+    // Fetch download URL from Cursor API
+    const apiUrl = `https://cursor.com/api/download?platform=${platform}&releaseTrack=stable`;
+    const response = await fetch(apiUrl);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to get download URL: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log(`Cursor version: ${data.version}`);
+    return data.downloadUrl;
   }
 
   /**
@@ -88,7 +130,7 @@ class CursorInstaller {
     }
 
     console.log('Downloading latest Cursor...');
-    const url = this.getDownloadUrl();
+    const url = await this.getDownloadUrl();
     console.log(`Download URL: ${url}`);
 
     try {
@@ -155,9 +197,15 @@ class CursorInstaller {
         execSync(`rm -rf "${this.installDir}"`);
       }
 
-      // Copy application
-      console.log('Copying Cursor.app to /Applications...');
-      execSync(`cp -R "${mountPoint}/Cursor.app" /Applications/`);
+      // Ensure parent directory exists for isolated installs
+      const parentDir = path.dirname(this.installDir);
+      if (!fs.existsSync(parentDir)) {
+        fs.mkdirSync(parentDir, { recursive: true });
+      }
+
+      // Copy application to install directory
+      console.log(`Copying Cursor.app to ${this.installDir}...`);
+      execSync(`cp -R "${mountPoint}/Cursor.app" "${this.installDir}"`);
 
       // Unmount DMG
       console.log('Unmounting DMG...');
@@ -402,13 +450,18 @@ class CursorInstaller {
 
 // CLI usage
 if (require.main === module) {
-  const installer = new CursorInstaller();
-
   const command = process.argv[2];
+  const useIsolated = process.argv.includes('--isolated');
+  
+  const installer = new CursorInstaller({ useIsolated });
+
+  if (useIsolated) {
+    console.log(`Using isolated installation directory: ${installer.installDir}`);
+  }
 
   if (command === 'download') {
     installer.downloadCursor(false)
-      .then(path => console.log(`Downloaded to: ${path}`))
+      .then(filePath => console.log(`Downloaded to: ${filePath}`))
       .catch(err => {
         console.error(err.message);
         process.exit(1);
@@ -424,8 +477,17 @@ if (require.main === module) {
     console.log('Cursor installed:', installer.isInstalled());
     console.log('Version:', installer.getVersion());
     console.log('Executable:', installer.getCursorExecutablePath());
+    console.log('Resources:', installer.getCursorResourcesPath());
   } else {
-    console.log('Usage: node cursor-installer.js [download|install|check]');
+    console.log('Usage: node cursor-installer.js [download|install|check] [--isolated]');
+    console.log('');
+    console.log('Commands:');
+    console.log('  download   Download Cursor installer to cache');
+    console.log('  install    Download and install Cursor');
+    console.log('  check      Check if Cursor is installed');
+    console.log('');
+    console.log('Options:');
+    console.log('  --isolated   Use isolated test installation (~/.cursor-test-installation)');
   }
 }
 

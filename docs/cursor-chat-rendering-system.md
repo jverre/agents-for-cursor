@@ -381,8 +381,752 @@ Key CSS classes for styling:
 
 ---
 
+## Tool Approval & Permission System
+
+Cursor implements a sophisticated **hooks-based permission system** that controls tool execution through external scripts. This allows users to approve, deny, or automatically allow tool calls.
+
+### Hook Types
+
+Defined in the `kb` namespace (fY namespace in workbench):
+
+```javascript
+kb = {
+  // Tool execution hooks
+  beforeShellExecution: "beforeShellExecution",
+  beforeMCPExecution: "beforeMCPExecution",
+  afterShellExecution: "afterShellExecution",
+  afterMCPExecution: "afterMCPExecution",
+
+  // File operation hooks
+  beforeReadFile: "beforeReadFile",
+  afterFileEdit: "afterFileEdit",
+  beforeTabFileRead: "beforeTabFileRead",
+  afterTabFileEdit: "afterTabFileEdit",
+
+  // Chat flow hooks
+  beforeSubmitPrompt: "beforeSubmitPrompt",
+  afterAgentResponse: "afterAgentResponse",
+  afterAgentThought: "afterAgentThought",
+  stop: "stop"
+}
+```
+
+### Permission Values
+
+Hooks return a response object with a `permission` field:
+
+| Value | Behavior | Description |
+|-------|----------|-------------|
+| `"allow"` | Auto-run | Tool executes immediately without user approval |
+| `"deny"` | Block | Tool execution is prevented |
+| `"ask"` | Prompt | UI shows approval dialog (Ask Every Time mode) |
+| `undefined` | Default | Falls back to default permission setting |
+
+### Hook Response Formats
+
+#### Command Execution Hooks
+
+For `beforeShellExecution` and `beforeMCPExecution`:
+
+```typescript
+interface CommandExecutionResponse {
+  permission?: "allow" | "deny" | "ask";
+  user_message?: string;    // Message shown to user in UI
+  agent_message?: string;   // Message sent to AI agent
+}
+```
+
+**Validator**: `wro` (out-build/vs/base/common/hooks/validators/beforeCommandExecutionHookResponse.js)
+
+#### File Read Hooks
+
+For `beforeReadFile` and `beforeTabFileRead`:
+
+```typescript
+interface FileReadResponse {
+  permission?: "allow" | "deny";  // Only allow or deny
+}
+```
+
+**Validator**: `WOc` and `HOc`
+
+#### Other Hook Responses
+
+- **afterFileEdit**, **afterTabFileEdit**: Base response object (no permission field)
+- **beforeSubmitPrompt**: Includes `continue?: boolean` and `user_message?: string`
+- **stop**: Includes `followup_message?: string`
+
+### Tool Review Service
+
+Located in workbench at the review model cache implementation:
+
+```javascript
+// Tools that skip review (auto-approved)
+if (r.tool === bt.MCP || r.tool === bt.CALL_MCP_TOOL || r.tool === bt.ACP_TOOL) {
+  const o = new vdt(n, t);
+  return this._reviewModelCache.set(t, o), o;
+}
+```
+
+**Key observations:**
+- MCP tools (types 19, 49) skip the review model
+- ACP tools (type 90) skip the review model
+- These tools still respect hook responses but don't show approval UI by default
+- The `vdt` class manages the review state for tools requiring approval
+
+### Approval Flow States
+
+Tools progress through these states during execution:
+
+```
+1. Tool Call Initiated
+   ├─► Hook Called (e.g., beforeShellExecution)
+   │
+   ├─► Hook Returns Permission
+   │   │
+   │   ├─► "allow" → status: "loading" (immediate execution)
+   │   ├─► "deny"  → status: "error" (blocked)
+   │   └─► "ask"   → status: "pending" (awaiting approval)
+   │
+   ├─► User Approves/Rejects (if "ask")
+   │   │
+   │   ├─► Approve → status: "loading"
+   │   └─► Reject  → status: "error"
+   │
+   ├─► Tool Executes
+   │   └─► status: "loading"
+   │
+   └─► Tool Completes
+       ├─► Success → status: "completed"
+       └─► Failure → status: "error"
+```
+
+### Tool Status Values
+
+| Status | Meaning | UI Rendering |
+|--------|---------|--------------|
+| `"loading"` | Tool is executing | Shows loading spinner, verb text (e.g., "Running command...") |
+| `"completed"` | Tool finished successfully | Shows result, completed verb (e.g., "Ran command") |
+| `"error"` | Tool failed or was denied | Shows error message in red |
+| `"pending"` | Awaiting user approval | Shows approve/reject buttons |
+
+### The ASK_QUESTION Tool
+
+**Type 51** (`bt.ASK_QUESTION`) is a special tool that implements interactive approval:
+
+```javascript
+// Tool parameters
+{
+  title: string,
+  questions: [{
+    id: string,
+    prompt: string,
+    allowMultiple: boolean,
+    options: [{
+      id: string,
+      label: string
+    }]
+  }]
+}
+```
+
+**Rendering** (line ~1222229):
+- Displays interactive UI with question prompt
+- Shows option buttons for user selection
+- Supports multi-select mode via `allowMultiple`
+- Returns user's selection as tool result
+- AI continues execution based on answer
+
+### Hook Integration with Rendering
+
+The rendering pipeline checks tool status to determine UI:
+
+```javascript
+// In Smo component (tool bubble renderer)
+get isLoading() {
+  return Ze().status === "loading";
+}
+
+// Conditional rendering based on status
+if (status === "pending") {
+  // Show approval buttons
+} else if (status === "loading") {
+  // Show loading spinner + verb
+} else if (status === "error") {
+  // Show error message
+} else {
+  // Show completed result
+}
+```
+
+### Approval UI Components
+
+When `status === "pending"`, tools render approval UI:
+
+1. **Command Preview**: Shows the command/tool parameters
+2. **User Message**: Displays `user_message` from hook response
+3. **Action Buttons**:
+   - "Accept" / "Approve" - Sets status to "loading", executes tool
+   - "Reject" / "Deny" - Sets status to "error", blocks tool
+4. **Remember Choice**: Option to update permission setting
+
+### Settings Integration
+
+User settings control default hook behavior:
+
+- **Always Allow** → Hooks return `"allow"` by default
+- **Ask Every Time** → Hooks return `"ask"` by default
+- **Never Allow** → Hooks return `"deny"` by default
+
+These settings are stored per-tool-type and can be overridden by hook scripts.
+
+---
+
+## Complete Rendering Flow with Approvals
+
+### Full Pipeline
+
+```
+1. AI Generates Tool Call
+   │
+   ▼
+2. Tool Call Created (params, type, callId)
+   │
+   ▼
+3. Before Hook Called
+   ├─► beforeShellExecution (for bash)
+   ├─► beforeMCPExecution (for MCP)
+   ├─► beforeReadFile (for read)
+   └─► (no hook for some tools)
+   │
+   ▼
+4. Hook Returns Permission
+   │
+   ├─► "allow" ──────────────┐
+   │                         │
+   ├─► "deny" ─────► Error   │
+   │                         │
+   └─► "ask" ───► UI Approval│
+                    │         │
+                    ▼         │
+                User Accepts  │
+                    │         │
+                    └─────────┘
+                         │
+                         ▼
+5. Tool Execution Starts
+   status: "loading"
+   │
+   ▼
+6. Rendering Pipeline Triggered
+   │
+   ├─► composerDataService updates bubble
+   │
+   ├─► Component re-renders (Smo)
+   │   │
+   │   ├─► Checks tool type (P(bt.TOOL_TYPE))
+   │   │
+   │   ├─► Renders tool-specific UI
+   │   │
+   │   └─► Shows loading spinner + verb
+   │
+   ▼
+7. Tool Completes
+   status: "completed"
+   result: { ... }
+   │
+   ▼
+8. After Hook Called
+   ├─► afterShellExecution
+   ├─► afterMCPExecution
+   └─► afterFileEdit
+   │
+   ▼
+9. Final Render
+   │
+   ├─► Shows completed verb
+   ├─► Displays result content
+   └─► Hides loading spinner
+```
+
+### Example: Bash Command Flow
+
+```
+User: "run npm install"
+
+1. AI: RUN_TERMINAL_COMMAND_V2 { command: "npm install" }
+
+2. beforeShellExecution hook called
+   Input: { command: "npm install", workingDirectory: "/path" }
+   Output: { permission: "ask", user_message: "Allow npm install?" }
+
+3. status: "pending"
+   Renders: Approval UI with "npm install" preview
+
+4. User clicks "Accept"
+   status: "loading"
+
+5. Rendering updates:
+   - Loading spinner appears
+   - Verb: "Running command..."
+   - Shows "npm install" in terminal preview
+
+6. Command executes, streams output
+
+7. Command completes
+   status: "completed"
+   result: { stdout: "added 523 packages...", exitCode: 0 }
+
+8. afterShellExecution hook called
+   Input: { command: "npm install", exitCode: 0, stdout: "..." }
+
+9. Final render:
+   - Spinner disappears
+   - Verb: "Ran command"
+   - Full terminal output displayed
+```
+
+---
+
+## Tool Content Rendering
+
+Different tools render different content in their bubbles. Here's what each tool type displays:
+
+### READ_FILE_V2 (Type 40)
+
+**Parameters**:
+```javascript
+{
+  path: string,
+  offset?: number,
+  limit?: number,
+  charsLimit: number
+}
+```
+
+**Result**:
+```javascript
+{
+  output: string,           // File contents
+  isEmpty: boolean,
+  exceededLimit: boolean,   // Truncated
+  totalLines: number,
+  fileSize: number,
+  path: string
+}
+```
+
+**Rendered Content**:
+- File path header
+- Syntax-highlighted code viewer
+- Line numbers
+- "Truncated" indicator if exceededLimit
+- Total lines / file size info
+
+#### CRITICAL: Tool Data Format
+
+**DO NOT stringify params or result!** Cursor expects these as **objects**, not JSON strings.
+
+**CORRECT ✅**:
+```javascript
+toolFormerData: {
+  tool: 40,
+  toolCallId: 'abc123',
+  status: 'loading',
+  name: 'read_file',
+  params: {                          // OBJECT, not string
+    targetFile: '/path/to/file.ts',
+    effectiveUri: 'file:///path/to/file.ts',
+    limit: 1000,
+    charsLimit: 100000
+  },
+  rawArgs: {                         // OBJECT, not string
+    target_file: '/path/to/file.ts',
+    limit: 1000,
+    offset: 0
+  },
+  result: {                          // OBJECT, not string
+    contents: 'file contents here...',
+    numCharactersInRequestedRange: 884,
+    totalLinesInFile: 29
+  }
+}
+```
+
+**INCORRECT ❌**:
+```javascript
+toolFormerData: {
+  tool: 40,
+  // ...
+  params: JSON.stringify({...}),     // WRONG - stringified
+  result: JSON.stringify({...})      // WRONG - stringified
+}
+```
+
+**Why this matters**:
+- Cursor's SolidJS components access fields directly (e.g., `params.targetFile`)
+- Stringified data causes `undefined` access errors
+- The READ_FILE_V2 renderer won't display file content if result is a string
+- This applies to ALL tool types, not just READ_FILE_V2
+
+**URI Format**:
+- `effectiveUri` must be: `'file://' + absolutePath`
+- For Unix paths starting with `/`: becomes `file:///path` (three slashes total)
+- For Windows paths: `file:///C:/path`
+
+**Field Name Mapping** (ACP → Cursor):
+- ACP sends `file_path`, Cursor expects `target_file` in rawArgs
+- params uses `targetFile` (camelCase)
+- effectiveUri must include `file://` prefix
+
+### EDIT_FILE_V2 (Type 38)
+
+**Parameters**:
+```javascript
+{
+  path: string,
+  oldString: string,
+  newString: string,
+  replaceAll?: boolean
+}
+```
+
+**Result**:
+```javascript
+{
+  success: boolean,
+  error?: string,
+  appliedEdits: number
+}
+```
+
+**Rendered Content**:
+- File path header
+- Diff viewer (Monaco diff editor)
+  - Red lines: oldString removed
+  - Green lines: newString added
+- "X edits applied" counter
+- Error message if failed
+
+### RUN_TERMINAL_COMMAND_V2 (Type 15)
+
+**Parameters**:
+```javascript
+{
+  command: string,
+  workingDirectory?: string
+}
+```
+
+**Result**:
+```javascript
+{
+  stdout: string,
+  stderr: string,
+  exitCode: number
+}
+```
+
+**Rendered Content**:
+- Command string in code block
+- Terminal output viewer
+  - stdout in white
+  - stderr in red
+- Exit code indicator
+- Working directory path
+
+### RIPGREP_RAW_SEARCH (Type 41)
+
+**Parameters**:
+```javascript
+{
+  pattern: string,
+  path?: string,
+  glob?: string,
+  outputMode: "content" | "files_with_matches" | "count",
+  contextBefore?: number,
+  contextAfter?: number,
+  caseInsensitive?: boolean,
+  type?: string
+}
+```
+
+**Result**:
+```javascript
+{
+  matches: [{
+    file: string,
+    line: number,
+    content: string,
+    matchStart: number,
+    matchEnd: number
+  }],
+  totalMatches: number
+}
+```
+
+**Rendered Content**:
+- Search pattern header
+- List of matches grouped by file
+- Each match shows:
+  - File path (clickable)
+  - Line number
+  - Highlighted match in context
+- Total matches count
+
+### GLOB_FILE_SEARCH (Type 42)
+
+**Parameters**:
+```javascript
+{
+  globPattern: string,
+  targetDirectory?: string
+}
+```
+
+**Result**:
+```javascript
+{
+  files: string[],
+  totalFiles: number
+}
+```
+
+**Rendered Content**:
+- Glob pattern header
+- File tree/list view
+- Clickable file paths
+- Total files count
+- Directory structure indicators
+
+### TODO_WRITE (Type 35)
+
+**Parameters**:
+```javascript
+{
+  todos: [{
+    content: string,
+    status: "pending" | "in_progress" | "completed",
+    activeForm: string
+  }]
+}
+```
+
+**Result**:
+```javascript
+{
+  success: boolean,
+  updatedTodos: [...]
+}
+```
+
+**Rendered Content**:
+- Todo list with checkboxes
+- Status indicators:
+  - ⭘ Pending (empty circle)
+  - ◐ In Progress (half circle)
+  - ✓ Completed (checkmark)
+- Task content (clickable)
+- Progress bar
+
+### ASK_QUESTION (Type 51)
+
+**Parameters**:
+```javascript
+{
+  title: string,
+  questions: [{
+    id: string,
+    prompt: string,
+    allowMultiple: boolean,
+    options: [{
+      id: string,
+      label: string
+    }]
+  }]
+}
+```
+
+**Result**:
+```javascript
+{
+  answers: {
+    [questionId]: string | string[]
+  }
+}
+```
+
+**Rendered Content**:
+- Question title
+- Question prompt text
+- Option buttons (single or multi-select)
+- Selected answers highlighted
+- Submit button (if not auto-submitted)
+
+### WEB_SEARCH (Type 18)
+
+**Parameters**:
+```javascript
+{
+  searchTerm: string
+}
+```
+
+**Result**:
+```javascript
+{
+  results: [{
+    title: string,
+    url: string,
+    snippet: string
+  }],
+  totalResults: number
+}
+```
+
+**Rendered Content**:
+- Search term header
+- Result cards:
+  - Title (clickable link)
+  - URL
+  - Snippet preview
+- "Show more" pagination
+- Total results count
+
+### MCP / CALL_MCP_TOOL (Types 19, 49)
+
+**Parameters**:
+```javascript
+{
+  toolName: string,
+  serverName: string,
+  args: { [key: string]: any }
+}
+```
+
+**Result**:
+```javascript
+{
+  content: string | object,
+  isError: boolean
+}
+```
+
+**Rendered Content**:
+- Tool name + server badge
+- Input arguments (collapsed JSON)
+- Output content (formatted based on type)
+- Error indicator if failed
+- MCP server icon
+
+### GENERATE_IMAGE (Type 53)
+
+**Parameters**:
+```javascript
+{
+  description: string,
+  filePath: string
+}
+```
+
+**Result**:
+```javascript
+{
+  imageUrl: string,
+  width: number,
+  height: number
+}
+```
+
+**Rendered Content**:
+- Description text
+- Generated image preview
+- Image dimensions
+- Download button
+- File path link
+
+### Tool Bubble Template Structure
+
+All tool bubbles follow this general structure:
+
+```html
+<div class="tool-bubble" data-tool-type="TYPE_ID" data-status="STATUS">
+  <!-- Header -->
+  <div class="tool-header">
+    <span class="tool-icon">...</span>
+    <span class="tool-verb">Verb text...</span>
+    <span class="tool-status-indicator">...</span>
+  </div>
+
+  <!-- Content (varies by tool type) -->
+  <div class="tool-content">
+    <!-- Tool-specific UI -->
+  </div>
+
+  <!-- Footer (if approval needed) -->
+  <div class="tool-footer" *ngIf="status === 'pending'">
+    <button class="approve">Accept</button>
+    <button class="reject">Reject</button>
+  </div>
+</div>
+```
+
+### Status-Based Rendering
+
+Each tool's content rendering adapts based on status:
+
+| Status | Header | Content | Footer |
+|--------|--------|---------|--------|
+| `loading` | Spinner + loading verb | Partial results (streaming) | Hidden |
+| `completed` | ✓ + completed verb | Full results | Hidden |
+| `error` | ✗ + error text | Error message | Hidden |
+| `pending` | ⏸ + "Waiting..." | Preview of action | Approve/Reject |
+
+---
+
+## Rendering Performance & Optimization
+
+### Message Virtualization
+
+The `mks` component (line ~978945) implements virtual scrolling:
+
+- Only renders messages visible in viewport
+- Maintains scroll position during updates
+- Lazy-loads message content on scroll
+- Recycles DOM elements for performance
+
+### Streaming Updates
+
+Tools with streaming results (terminal commands, thinking) use incremental rendering:
+
+1. **Initial render**: Shows tool bubble with loading state
+2. **Stream chunks**: Append to existing content (no full re-render)
+3. **Completion**: Final render with full result
+
+**Implementation**:
+```javascript
+// Streaming handler
+onChunk(chunk) {
+  this.accumulatedOutput += chunk;
+  this.updateDOMDirectly(chunk);  // Append only new content
+}
+```
+
+### Memoization
+
+SolidJS components use `ve()` (reactive memoization) to avoid unnecessary re-renders:
+
+```javascript
+// Only re-computes when dependencies change
+const toolStatus = ve(() => bubble().status);
+const isLoading = ve(() => toolStatus() === "loading");
+```
+
+---
+
 ## Related Documentation
 
 - [Cursor Tool Bubble Format](./cursor-tool-bubble-format.md) - Data format for tool call bubbles in the database
 - [Cursor Chat Data Flow](./cursor-chat-data-flow.md) - How data flows through the chat system
 - [Agent Client Protocol](./agent-client-protocol.md) - Protocol for external agents
+- [Hooks System](./hooks-system.md) - Complete guide to implementing permission hooks

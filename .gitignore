@@ -5,17 +5,19 @@ node_modules/
 # Test artifacts
 tests/screenshots/
 tests/logs/
-tests/test-user-data
+tests/test-user-data/
 coverage/
 test-results/
 .cursor-test-cache/
 
-# Allow the pre-configured e2e-user-data directory
-!tests/e2e-user-data/
+# E2E test user data - ignore the entire directory
+# This directory is created fresh by setup-test-auth.js on each test run
+# Cursor writes runtime data (logs, caches, cookies) here when launched
+tests/e2e-user-data/
 
 # Test downloads
 *.dmg
 *.AppImage
 *.exe
 
-.DS_Store
+.DS_Storetests/temp/

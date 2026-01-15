@@ -8,7 +8,7 @@ getCommands(e,t){
   try {
     const _acpCmds = window.acpService?.getSlashCommands?.("claude-code") || [];
     if (_acpCmds.length > 0) {
-      console.log("[ACP] Injecting", _acpCmds.length, "slash commands into ChatSlashCommandService");
+      window.acpLog?.('DEBUG', "[ACP] Injecting", _acpCmds.length, "slash commands into ChatSlashCommandService");
       const _mapped = _acpCmds.map(_c => ({
         command: _c.name.startsWith('/') ? _c.name.slice(1) : _c.name,
         detail: _c.description || "",
@@ -20,7 +20,7 @@ getCommands(e,t){
       return [..._mapped, ..._origCmds];
     }
   } catch(_e) {
-    console.error("[ACP] Error injecting slash commands:", _e);
+    window.acpLog?.('ERROR', "[ACP] Error injecting slash commands:", _e);
   }
   return _origCmds;
 }
