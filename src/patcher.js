@@ -104,9 +104,15 @@ async function patchMainWorkbench() {
 
     let mainContent = await fs.readFile(mainWorkbenchPath, 'utf8');
 
-    // Check if already patched with current version
-    if (mainContent.includes(getAcpToken())) {
-        return;
+    // If already patched (any ACP version), restore from backup to reapply latest patch content
+    if (mainContent.includes('ACP_PATCH_')) {
+        try {
+            const mainBackupContent = await fs.readFile(getMainBackupPath(), 'utf8');
+            mainContent = mainBackupContent;
+            console.log('[ACP Patcher] Restored main workbench backup to reapply patches');
+        } catch {
+            console.log('[ACP Patcher] Main workbench backup not found; proceeding with existing content');
+        }
     }
 
     // Load patch patterns from JSON file
