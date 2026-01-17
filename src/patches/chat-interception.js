@@ -174,6 +174,30 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                 const WEB_FETCH_TYPE = 19; // URL fetch tool
                 const SWITCH_MODE_TYPE = 52;
 
+                // Plan file detection
+                const isPlanFile = (filePath) => {
+                  if (!filePath) return false;
+                  return filePath.endsWith('.plan.md') || 
+                         filePath.includes('/.claude/plans/') ||
+                         filePath.includes('\\.claude\\plans\\');
+                };
+
+                // Parse "### N. Step title" headers from markdown
+                const parsePlanTodos = (content) => {
+                  const todos = [];
+                  // Match: "### 1. Step title" or "## 1. Step title"
+                  const stepRegex = /^#{2,4}\s*(\d+)\.\s+(.+)$/gm;
+                  let match;
+                  while ((match = stepRegex.exec(content)) !== null) {
+                    todos.push({
+                      id: `step_${match[1]}`,
+                      content: match[2].trim(),
+                      status: 'pending'
+                    });
+                  }
+                  return todos;
+                };
+
                 // Detect tool type (use stored type for updates, or detect from event)
                 const storedType = s.toolTypes?.get(toolCallId);
                 const isReadTool = tc.kind === 'read' || storedType?.isRead;
@@ -696,6 +720,31 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                         });
 
                         window.acpDebug?.( '[ACP] Result set with IDs - beforeContentId:', beforeContentId, 'afterContentId:', afterContentId);
+
+                        // Plan file detection - only at completion when we have full content
+                        if (isPlanFile(editData.filePath)) {
+                          const planContent = afterContent || editData.newString || '';
+                          const todos = parsePlanTodos(planContent);
+                          
+                          if (todos.length > 0) {
+                            window.acpLog?.('INFO', '[ACP] 📋 Plan file detected:', editData.filePath, 'todos:', todos.length);
+                            
+                            const rawArgs = { todos };
+                            svc.updateComposerDataSetStore({{e}}, u => {
+                              u("conversationMap", toolBubbleId, "toolFormerData", {
+                                type: TODO_WRITE_TYPE,
+                                tool: TODO_WRITE_TYPE,
+                                toolCallId: toolCallId,
+                                status: 'completed',
+                                requestId: toolBubbleId,
+                                rawArgs: JSON.stringify(rawArgs),
+                                params: rawArgs
+                              });
+                              u("conversationMap", toolBubbleId, "isPlanExecution", true);
+                              u("conversationMap", toolBubbleId, "todos", todos);
+                            });
+                          }
+                        }
                       })();
                     }
                   }
