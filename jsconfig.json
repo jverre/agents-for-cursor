@@ -1,0 +1,5 @@
+{
+  "exclude": [
+    "src/patches/chat-interception.js"
+  ]
+}

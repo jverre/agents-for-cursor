@@ -509,6 +509,52 @@ async function activate(context) {
             return;
         }
 
+        // POST /acp/mirrorPlan - mirror plan content to ~/.cursor/plans for .claude plans
+        if (req.method === 'POST' && req.url === '/acp/mirrorPlan') {
+            acpLog('INFO', '[ACP] 📋 mirrorPlan endpoint HIT');
+            let body = '';
+            req.on('data', chunk => { body += chunk.toString(); });
+            req.on('end', async () => {
+                acpLog('INFO', '[ACP] 📋 mirrorPlan body received, len:', body.length);
+                try {
+                    const { sourcePath, targetPath, content } = JSON.parse(body || '{}');
+                    acpLog('INFO', '[ACP] 📋 mirrorPlan parsed - sourcePath:', sourcePath, 'targetPath:', targetPath, 'contentLen:', content?.length);
+                    const normalizedSource = String(sourcePath || '').replace(/\\/g, '/');
+                    const normalizedTarget = String(targetPath || '').replace(/\\/g, '/');
+                    const cursorPlansRoot = path.join(os.homedir(), '.cursor', 'plans').replace(/\\/g, '/');
+                    acpLog('INFO', '[ACP] 📋 mirrorPlan normalized - source:', normalizedSource, 'target:', normalizedTarget, 'root:', cursorPlansRoot);
+
+                    if (!normalizedSource.includes('/.claude/plans/')) {
+                        acpLog('WARN', '[ACP] 📋 mirrorPlan REJECTED - source not in ~/.claude/plans');
+                        res.writeHead(400, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: true, message: 'Source path is not in ~/.claude/plans' }));
+                        return;
+                    }
+
+                    if (!normalizedTarget.startsWith(cursorPlansRoot)) {
+                        acpLog('WARN', '[ACP] 📋 mirrorPlan REJECTED - target not in ~/.cursor/plans');
+                        res.writeHead(400, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: true, message: 'Target path is not in ~/.cursor/plans' }));
+                        return;
+                    }
+
+                    const targetDir = path.dirname(normalizedTarget);
+                    acpLog('INFO', '[ACP] 📋 mirrorPlan creating dir:', targetDir);
+                    await fs.promises.mkdir(targetDir, { recursive: true });
+                    acpLog('INFO', '[ACP] 📋 mirrorPlan writing file:', normalizedTarget);
+                    await fs.promises.writeFile(normalizedTarget, content || '', 'utf8');
+                    acpLog('INFO', '[ACP] 📋 mirrorPlan SUCCESS - wrote to', normalizedTarget);
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok: true }));
+                } catch (error) {
+                    acpLog('ERROR', '[ACP] 📋 mirrorPlan FAILED:', error.message, error.stack);
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: true, message: error.message }));
+                }
+            });
+            return;
+        }
+
         // GET /acp/getSlashCommands - return cached slash commands for a provider
         if (req.method === 'GET' && req.url.startsWith('/acp/getSlashCommands')) {
             const url = new URL(req.url, 'http://localhost');

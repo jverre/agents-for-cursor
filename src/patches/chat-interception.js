@@ -131,6 +131,21 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
           const stateKey = `_acp_${composerId}`;
           window[stateKey] = { text: '', bubbleId: responseBubbleId, toolBubbles: new Map(), planBubbleId: null, planToolCallId: null };
 
+          // Tool type constants shared across tool and plan handlers
+          const TOOL_FORMER_CAPABILITY = 15;
+          const READ_FILE_V2_TYPE = 40;
+          const RUN_TERMINAL_COMMAND_V2_TYPE = 15;
+          const SEARCH_REPLACE_TYPE = 38;
+          const GREP_TYPE = 41;
+          const GLOB_TYPE = 42;
+          const LIST_DIR_TYPE = 39;
+          const TODO_WRITE_TYPE = 35;
+          const CREATE_PLAN_TYPE = 43; // Plan creation tool
+          const MCP_TOOL_TYPE = 99; // Generic MCP tool fallback
+          const WEB_SEARCH_TYPE = 18;
+          const WEB_FETCH_TYPE = 19; // URL fetch tool
+          const SWITCH_MODE_TYPE = 52;
+
           const composerData = composerHandle?.data || {};
           const uiMode = document?.querySelector?.('.composer-unified-dropdown[data-mode]')?.getAttribute('data-mode');
           const mapUnifiedMode = (modeValue) => {
@@ -244,40 +259,56 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                   })) : null
                 }, null, 2));
 
-                const TOOL_FORMER_CAPABILITY = 15;
-                const READ_FILE_V2_TYPE = 40;
-                const RUN_TERMINAL_COMMAND_V2_TYPE = 15;
-                const SEARCH_REPLACE_TYPE = 38;
-                const GREP_TYPE = 41;
-                const GLOB_TYPE = 42;
-                const LIST_DIR_TYPE = 39;
-                const TODO_WRITE_TYPE = 35;
-                const MCP_TOOL_TYPE = 99; // Generic MCP tool fallback
-                const WEB_SEARCH_TYPE = 18;
-                const WEB_FETCH_TYPE = 19; // URL fetch tool
-                const SWITCH_MODE_TYPE = 52;
 
                 // Plan file detection
                 const isPlanFile = (filePath) => {
                   if (!filePath) return false;
-                  return filePath.endsWith('.plan.md') || 
-                         filePath.includes('/.claude/plans/') ||
-                         filePath.includes('\\.claude\\plans\\');
+                  const normalizedPath = filePath.replace(/\\/g, '/');
+                  const inClaudePlans = normalizedPath.includes('/.claude/plans/');
+                  const inCursorPlans = normalizedPath.includes('/.cursor/plans/');
+                  const isPlanExtension = normalizedPath.endsWith('.plan.md');
+                  const isMarkdown = normalizedPath.endsWith('.md');
+                  return (inCursorPlans && isPlanExtension) || (inClaudePlans && isMarkdown);
                 };
 
-                // Parse "### N. Step title" headers from markdown
+                // Parse todos from "Implementation Steps" section at end of plan file
+                // If no Implementation Steps found, return a single "implement plan" todo
                 const parsePlanTodos = (content) => {
                   const todos = [];
-                  // Match: "### 1. Step title" or "## 1. Step title"
-                  const stepRegex = /^#{2,4}\s*(\d+)\.\s+(.+)$/gm;
-                  let match;
-                  while ((match = stepRegex.exec(content)) !== null) {
+                  
+                  // Look for "Implementation Steps" or "## Implementation Steps" section
+                  const implStepsMatch = content.match(/(?:^|\n)(?:#{1,3}\s*)?Implementation\s+Steps\s*\n([\s\S]*?)(?:\n#{1,3}\s|$)/i);
+                  
+                  if (implStepsMatch) {
+                    const stepsSection = implStepsMatch[1];
+                    // Match numbered items: "1. Step title" or "- [ ] Step title" or "- Step title"
+                    const stepRegex = /^(?:\s*[-*]\s*(?:\[[ x]\]\s*)?|\s*(\d+)\.\s*)(.+)$/gm;
+                    let match;
+                    let stepNum = 1;
+                    while ((match = stepRegex.exec(stepsSection)) !== null) {
+                      const stepId = match[1] || stepNum;
+                      // Clean up markdown formatting (remove ** bold markers, checkboxes)
+                      const cleanContent = match[2].trim().replace(/^\*\*|\*\*$/g, '').replace(/^\[[ x]\]\s*/i, '');
+                      if (cleanContent) {
+                        todos.push({
+                          id: `step_${stepId}`,
+                          content: cleanContent,
+                          status: 'pending'
+                        });
+                        stepNum++;
+                      }
+                    }
+                  }
+                  
+                  // If no todos found, add a default "implement plan" todo
+                  if (todos.length === 0) {
                     todos.push({
-                      id: `step_${match[1]}`,
-                      content: match[2].trim(),
+                      id: 'step_1',
+                      content: 'Implement plan',
                       status: 'pending'
                     });
                   }
+                  
                   return todos;
                 };
 
@@ -663,20 +694,26 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                     // Find diff content from tc.content array
                     const diffContent = tc.content?.find(c => c.type === 'diff');
                     
+                    // ACP Write tool uses 'content' field, search_replace uses 'new_string'
+                    const writeContent = inputObj.content || inputObj.new_string || '';
+                    
                     s.editData.set(toolCallId, {
                       filePath: inputObj.file_path,
                       oldString: inputObj.old_string || '',
-                      newString: inputObj.new_string || '',
+                      newString: writeContent,
                       oldText: diffContent?.oldText || null,
-                      newText: diffContent?.newText || null
+                      newText: diffContent?.newText || writeContent || null
                     });
                     
-                    window.acpDebug?.( '[ACP] Stored edit data for', toolCallId, 
+                    window.acpLog?.('INFO', '[ACP] 📝 Stored edit data for', toolCallId, 
                       'filePath:', inputObj.file_path,
                       'oldString len:', inputObj.old_string?.length || 0,
-                      'newString len:', inputObj.new_string?.length || 0,
+                      'newString len:', (inputObj.new_string || '').length,
+                      'content len:', (inputObj.content || '').length,
+                      'writeContent len:', writeContent.length,
                       'diffOldText:', !!diffContent?.oldText,
-                      'diffNewText:', !!diffContent?.newText);
+                      'diffNewText:', !!diffContent?.newText,
+                      'diffNewText actual len:', (diffContent?.newText || '').length);
                   }
 
                   if (isNew && !s.toolBubbles.has(toolCallId)) {
@@ -805,27 +842,77 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                         window.acpDebug?.( '[ACP] Result set with IDs - beforeContentId:', beforeContentId, 'afterContentId:', afterContentId);
 
                         // Plan file detection - only at completion when we have full content
+                        window.acpLog?.('INFO', '[ACP] 🔍 PLAN CHECK - filePath:', editData.filePath, 'isPlanFile:', isPlanFile(editData.filePath));
                         if (isPlanFile(editData.filePath)) {
                           const planContent = afterContent || editData.newString || '';
+                          window.acpLog?.('INFO', '[ACP] 📋 PLAN FILE DETECTED - path:', editData.filePath, 'contentLen:', planContent?.length);
+                          const normalizedPath = (editData.filePath || '').replace(/\\/g, '/');
+                          window.acpLog?.('INFO', '[ACP] 📋 PLAN normalizedPath:', normalizedPath, 'includesClaude:', normalizedPath.includes('/.claude/plans/'));
+                          if (normalizedPath.includes('/.claude/plans/')) {
+                            const cursorPlanPath = normalizedPath.replace('/.claude/plans/', '/.cursor/plans/');
+                            window.acpLog?.('INFO', '[ACP] 📋 PLAN MIRROR - source:', editData.filePath, 'target:', cursorPlanPath);
+                            fetch('http://localhost:37842/acp/mirrorPlan', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                sourcePath: editData.filePath,
+                                targetPath: cursorPlanPath,
+                                content: planContent
+                              })
+                            }).then(r => {
+                              window.acpLog?.('INFO', '[ACP] 📋 PLAN MIRROR response status:', r.status);
+                              return r.text();
+                            }).then(txt => {
+                              window.acpLog?.('INFO', '[ACP] 📋 PLAN MIRROR response body:', txt);
+                            }).catch(err => {
+                              window.acpLog?.('ERROR', '[ACP] 📋 PLAN MIRROR fetch error:', err?.message || err);
+                            });
+                          }
                           const todos = parsePlanTodos(planContent);
+                          window.acpLog?.('INFO', '[ACP] 📋 PLAN TODOS parsed:', todos.length, 'items');
                           
                           if (todos.length > 0) {
                             window.acpLog?.('INFO', '[ACP] 📋 Plan file detected:', editData.filePath, 'todos:', todos.length);
                             
-                            const rawArgs = { todos };
+                            // Extract plan name and overview from content
+                            const planFileName = editData.filePath.split('/').pop() || 'plan.md';
+                            const planName = planFileName.replace(/\.plan\.md$|\.md$/, '').replace(/[-_]/g, ' ');
+                            
+                            // Parse overview from plan content (first paragraph before todos)
+                            const overviewMatch = planContent.match(/^([\s\S]*?)(?=\n\s*[-*]\s*\[)/);
+                            const overview = overviewMatch ? overviewMatch[1].trim() : '';
+                            
+                            // Build params matching Cursor's createPlanParams structure
+                            const planParams = {
+                              name: planName,
+                              overview: overview,
+                              plan: planContent,
+                              todos: todos
+                            };
+                            
+                            // Build additionalData with planUri for the plan bubble component
+                            const planUri = 'file://' + editData.filePath;
+                            
                             svc.updateComposerDataSetStore({{e}}, u => {
                               u("conversationMap", toolBubbleId, "toolFormerData", {
-                                type: TODO_WRITE_TYPE,
-                                tool: TODO_WRITE_TYPE,
+                                type: CREATE_PLAN_TYPE,
+                                tool: CREATE_PLAN_TYPE,
                                 toolCallId: toolCallId,
+                                toolIndex: 0,
+                                modelCallId: "",
                                 status: 'completed',
+                                name: 'create_plan',
                                 requestId: toolBubbleId,
-                                rawArgs: JSON.stringify(rawArgs),
-                                params: rawArgs
+                                rawArgs: JSON.stringify(planParams),
+                                params: planParams,
+                                additionalData: {
+                                  planUri: planUri
+                                }
                               });
                               u("conversationMap", toolBubbleId, "isPlanExecution", true);
                               u("conversationMap", toolBubbleId, "todos", todos);
                             });
+                            window.acpLog?.('INFO', '[ACP] 📋 Plan bubble updated with CREATE_PLAN_TYPE (43), planUri:', planUri, 'todos:', todos.length);
                           }
                         }
                       })();
