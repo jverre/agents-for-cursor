@@ -39,6 +39,33 @@ function getWorkspacePath() {
 }
 
 /**
+ * Normalize Cursor/agent mode identifiers to ACP mode IDs
+ */
+function normalizeModeId(modeId) {
+    if (!modeId) return null;
+    let value = modeId;
+    if (typeof value !== 'string') {
+        if (typeof value === 'number') return null;
+        if (value?.id) value = value.id;
+        else if (value?.name) value = value.name;
+        else return null;
+    }
+    const raw = value.trim();
+    if (!raw) return null;
+    const lower = raw.toLowerCase();
+    if (raw === 'default' || raw === 'acceptEdits' || raw === 'plan' || raw === 'dontAsk' || raw === 'bypassPermissions') {
+        return raw;
+    }
+    if (lower === 'acceptedits') return 'acceptEdits';
+    if (lower === 'dontask') return 'dontAsk';
+    if (lower === 'bypasspermissions') return 'bypassPermissions';
+    if (lower === 'plan') return 'plan';
+    if (lower === 'ask') return 'default';
+    if (lower === 'agent') return 'acceptEdits';
+    return null;
+}
+
+/**
  * ACP Agent Manager - Handles subprocess lifecycle and JSON-RPC communication
  */
 class ACPAgentManager {
@@ -582,7 +609,7 @@ async function activate(context) {
 
             req.on('end', async () => {
                 try {
-                    const { provider, message, composerId, stream } = JSON.parse(body);
+                    const { provider, message, composerId, stream, modeId } = JSON.parse(body);
 
                     if (stream) {
                         // Streaming mode - send chunks as NDJSON
@@ -609,13 +636,16 @@ async function activate(context) {
                             agentManager.sessions.set(composerId, { sessionId, providerId: agent.providerId });
                         }
 
-                        // Always set permission mode (idempotent - safe to call on existing sessions)
+                        // Set permission mode if specified (idempotent - safe to call on existing sessions)
                         try {
+                            const normalizedModeId = normalizeModeId(modeId);
+                            const effectiveModeId = normalizedModeId || 'bypassPermissions';
+                            acpLog('INFO', '[ACP] Setting permission mode:', effectiveModeId, '| raw:', modeId);
                             await agentManager.sendRequest(agent, 'session/set_mode', {
                                 sessionId: sessionId,
-                                modeId: 'bypassPermissions'
+                                modeId: effectiveModeId
                             });
-                            console.log(`[ACP] Set permission mode to bypassPermissions for session ${sessionId}`);
+                            console.log(`[ACP] Set permission mode to ${effectiveModeId} for session ${sessionId}`);
                         } catch (err) {
                             console.log(`[ACP] Could not set permission mode: ${err.message}`);
                         }
@@ -643,6 +673,12 @@ async function activate(context) {
                                 } else if (update?.sessionUpdate === 'tool_call' || update?.sessionUpdate === 'tool_call_update') {
                                     console.log(`[ACP] 🔧 Tool session=${sessionId.slice(0, 8)} event=${update.sessionUpdate} status=${update.status || 'pending'}`);
                                     res.write(JSON.stringify({ type: 'tool', ...update }) + '\n');
+                                } else if (update?.sessionUpdate === 'plan') {
+                                    console.log(`[ACP] 🗂️ Plan update session=${sessionId.slice(0, 8)} entries=${update.entries?.length || 0}`);
+                                    res.write(JSON.stringify({ type: 'plan', ...update }) + '\n');
+                                } else if (update?.sessionUpdate === 'current_mode_update') {
+                                    console.log(`[ACP] 🧭 Mode update session=${sessionId.slice(0, 8)} mode=${update.currentModeId}`);
+                                    res.write(JSON.stringify({ type: 'mode', ...update }) + '\n');
                                 }
                             }
                         };
