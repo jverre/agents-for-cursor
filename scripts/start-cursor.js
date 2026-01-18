@@ -21,7 +21,11 @@ async function main() {
   // Always use isolated installation for local dev
   process.env.LOCAL = 'true';
   
+  // Enable ACP debug logging
+  process.env.ACP_DEBUG = 'true';
+  
   console.log('[Start] Setting up isolated Cursor for testing...');
+  console.log('[Start] ACP_DEBUG enabled - logs will be written to ~/.cursor-acp.log');
 
   const userDataDir = path.join(__dirname, '..', 'tests', 'e2e-user-data');
   const extensionPath = path.join(__dirname, '..');

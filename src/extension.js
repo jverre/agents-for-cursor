@@ -125,12 +125,32 @@ class ACPAgentManager {
 
                 // Handle permission requests from agent - auto-approve all
                 if (message.method === 'session/request_permission' && message.id !== undefined) {
-                    acpLog('INFO', '[ACP] Auto-approving permission request:', message.params?.permission?.kind);
+                    const params = message.params || {};
+                    // New format (0.13.x): uses options array with optionId
+                    // Old format: uses permission.kind
+                    const permissionKind = params.permission?.kind || params.toolCall?.title || 'unknown';
+                    acpLog('INFO', '[ACP] Auto-approving permission request:', permissionKind);
+
+                    // Find the "allow_always" or "allow" option from the options array
+                    let optionId = 'allow_always'; // default fallback
+                    if (params.options && Array.isArray(params.options)) {
+                        const allowAlways = params.options.find(o => o.kind === 'allow_always' || o.optionId === 'allow_always');
+                        const allowOnce = params.options.find(o => o.kind === 'allow_once' || o.optionId === 'allow');
+                        optionId = allowAlways?.optionId || allowOnce?.optionId || 'allow_always';
+                    }
+
+                    // ACP protocol format: outcome.outcome = "selected", outcome.optionId = chosen option
                     const response = {
                         jsonrpc: '2.0',
                         id: message.id,
-                        result: { granted: true }
+                        result: {
+                            outcome: {
+                                outcome: 'selected',
+                                optionId: optionId
+                            }
+                        }
                     };
+                    acpLog('DEBUG', '[ACP] Permission response:', JSON.stringify(response.result));
                     agent.process.stdin.write(JSON.stringify(response) + '\n');
                 }
 
@@ -282,6 +302,9 @@ class ACPAgentManager {
                     // Log tool events for debugging
                     if (update?.sessionUpdate === 'tool_call' || update?.sessionUpdate === 'tool_call_update') {
                         acpLog('INFO', '[ACP] Tool event:', update.sessionUpdate, '| id:', update.toolCallId?.slice(0, 8), '| status:', update.status, '| kind:', update.kind);
+                        if (update.status === 'failed') {
+                            acpLog('ERROR', '[ACP] Tool FAILED - full update:', JSON.stringify(update, null, 2));
+                        }
                     }
 
                     // Forward to session-specific listener (routes by sessionId to avoid race conditions)
@@ -509,6 +532,52 @@ async function activate(context) {
             return;
         }
 
+        // POST /acp/mirrorPlan - mirror plan content to ~/.cursor/plans for .claude plans
+        if (req.method === 'POST' && req.url === '/acp/mirrorPlan') {
+            acpLog('INFO', '[ACP] 📋 mirrorPlan endpoint HIT');
+            let body = '';
+            req.on('data', chunk => { body += chunk.toString(); });
+            req.on('end', async () => {
+                acpLog('INFO', '[ACP] 📋 mirrorPlan body received, len:', body.length);
+                try {
+                    const { sourcePath, targetPath, content } = JSON.parse(body || '{}');
+                    acpLog('INFO', '[ACP] 📋 mirrorPlan parsed - sourcePath:', sourcePath, 'targetPath:', targetPath, 'contentLen:', content?.length);
+                    const normalizedSource = String(sourcePath || '').replace(/\\/g, '/');
+                    const normalizedTarget = String(targetPath || '').replace(/\\/g, '/');
+                    const cursorPlansRoot = path.join(os.homedir(), '.cursor', 'plans').replace(/\\/g, '/');
+                    acpLog('INFO', '[ACP] 📋 mirrorPlan normalized - source:', normalizedSource, 'target:', normalizedTarget, 'root:', cursorPlansRoot);
+
+                    if (!normalizedSource.includes('/.claude/plans/')) {
+                        acpLog('WARN', '[ACP] 📋 mirrorPlan REJECTED - source not in ~/.claude/plans');
+                        res.writeHead(400, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: true, message: 'Source path is not in ~/.claude/plans' }));
+                        return;
+                    }
+
+                    if (!normalizedTarget.startsWith(cursorPlansRoot)) {
+                        acpLog('WARN', '[ACP] 📋 mirrorPlan REJECTED - target not in ~/.cursor/plans');
+                        res.writeHead(400, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: true, message: 'Target path is not in ~/.cursor/plans' }));
+                        return;
+                    }
+
+                    const targetDir = path.dirname(normalizedTarget);
+                    acpLog('INFO', '[ACP] 📋 mirrorPlan creating dir:', targetDir);
+                    await fs.promises.mkdir(targetDir, { recursive: true });
+                    acpLog('INFO', '[ACP] 📋 mirrorPlan writing file:', normalizedTarget);
+                    await fs.promises.writeFile(normalizedTarget, content || '', 'utf8');
+                    acpLog('INFO', '[ACP] 📋 mirrorPlan SUCCESS - wrote to', normalizedTarget);
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok: true }));
+                } catch (error) {
+                    acpLog('ERROR', '[ACP] 📋 mirrorPlan FAILED:', error.message, error.stack);
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: true, message: error.message }));
+                }
+            });
+            return;
+        }
+
         // GET /acp/getSlashCommands - return cached slash commands for a provider
         if (req.method === 'GET' && req.url.startsWith('/acp/getSlashCommands')) {
             const url = new URL(req.url, 'http://localhost');
@@ -610,6 +679,7 @@ async function activate(context) {
             req.on('end', async () => {
                 try {
                     const { provider, message, composerId, stream, modeId } = JSON.parse(body);
+                    acpLog('INFO', '[ACP] /acp/sendMessage received | stream:', stream, '| modeId:', modeId, '| composerId:', composerId?.slice(0, 8));
 
                     if (stream) {
                         // Streaming mode - send chunks as NDJSON
@@ -641,13 +711,13 @@ async function activate(context) {
                             const normalizedModeId = normalizeModeId(modeId);
                             const effectiveModeId = normalizedModeId || 'bypassPermissions';
                             acpLog('INFO', '[ACP] Setting permission mode:', effectiveModeId, '| raw:', modeId);
-                            await agentManager.sendRequest(agent, 'session/set_mode', {
+                            const modeResult = await agentManager.sendRequest(agent, 'session/set_mode', {
                                 sessionId: sessionId,
                                 modeId: effectiveModeId
                             });
-                            console.log(`[ACP] Set permission mode to ${effectiveModeId} for session ${sessionId}`);
+                            acpLog('INFO', `[ACP] Set permission mode to ${effectiveModeId} for session ${sessionId} | result:`, JSON.stringify(modeResult));
                         } catch (err) {
-                            console.log(`[ACP] Could not set permission mode: ${err.message}`);
+                            acpLog('ERROR', `[ACP] Could not set permission mode: ${err.message}`);
                         }
 
                         // Register session-specific streaming listener (keyed by sessionId to avoid race conditions)

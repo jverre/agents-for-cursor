@@ -60,8 +60,8 @@ describe('E2E: Claude Code (ACP) File Edit Tool', () => {
     await cursor.sendChatMessage(editMessage);
     await cursor.screenshot('7-file-edit-5-message-sent.png');
 
-    // Wait for the response to complete
-    await cursor.waitForChatResponse(90000);
+    // Wait for the response to complete (up to 60 seconds)
+    await cursor.waitForChatResponse(60000);
     await cursor.screenshot('7-file-edit-6-response-complete.png');
 
     // Check that a tool call element exists with data-message-kind="tool"
