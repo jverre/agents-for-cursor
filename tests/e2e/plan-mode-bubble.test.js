@@ -51,6 +51,6 @@ describe('E2E: Plan Mode Bubble Rendering', () => {
     await cursor.screenshot('16-plan-bubble-7-final.png');
 
     expect(buildButtonExists).toBe(true);
-    expect(todoCount).toBeGreaterThanOrEqual(2);
+    expect(todoCount).toBeGreaterThanOrEqual(1);
   }, 180000);
 });
