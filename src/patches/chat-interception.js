@@ -129,7 +129,16 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
 
           // Simple state: accumulate text, track tool bubbles and their types
           const stateKey = `_acp_${composerId}`;
-          window[stateKey] = { text: '', bubbleId: responseBubbleId, toolBubbles: new Map(), planBubbleId: null, planToolCallId: null };
+          window[stateKey] = {
+            text: '',
+            bubbleId: responseBubbleId,
+            toolBubbles: new Map(),
+            planBubbleId: null,
+            planToolCallId: null,
+            pendingToolCalls: new Map(),
+            pendingFinalizers: new Set(),
+            streamDone: false
+          };
 
           // Tool type constants shared across tool and plan handlers
           const TOOL_FORMER_CAPABILITY = 15;
@@ -233,6 +242,33 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                 const isComplete = tc.status === 'completed';
                 const isFailed = tc.status === 'failed';
                 const isToolResult = tc.sessionUpdate === 'tool_result';
+                const addPendingTool = () => {
+                  if (!isNew || !toolCallId) return;
+                  if (!s.pendingToolCalls) s.pendingToolCalls = new Map();
+                  if (!s.pendingToolCalls.has(toolCallId)) {
+                    s.pendingToolCalls.set(toolCallId, { kind: tc.kind, title: tc.title });
+                    window.acpDebug?.('[ACP] 🧩 Tool pending added:', toolCallId, tc.kind, tc.title, 'pending=', s.pendingToolCalls.size);
+                  }
+                };
+                const resolvePendingTool = (statusLabel) => {
+                  if (!toolCallId || !s.pendingToolCalls) return;
+                  if (s.pendingToolCalls.has(toolCallId)) {
+                    s.pendingToolCalls.delete(toolCallId);
+                    window.acpDebug?.('[ACP] ✅ Tool pending resolved:', toolCallId, statusLabel, 'pending=', s.pendingToolCalls.size);
+                  }
+                };
+                const trackFinalizer = (promise, label) => {
+                  if (!promise) return;
+                  if (!s.pendingFinalizers) s.pendingFinalizers = new Set();
+                  s.pendingFinalizers.add(promise);
+                  window.acpDebug?.('[ACP] ⏳ Finalizer added:', label, 'finalizers=', s.pendingFinalizers.size);
+                  promise.finally(() => {
+                    s.pendingFinalizers.delete(promise);
+                    window.acpDebug?.('[ACP] ✅ Finalizer resolved:', label, 'finalizers=', s.pendingFinalizers.size);
+                  });
+                };
+                addPendingTool();
+                try {
 
                 // Get tool input early for logging
                 const toolInput = tc.input || tc.rawInput || {};
@@ -444,6 +480,9 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                         u("conversationMap", toolBubbleId, "toolFormerData", "result", finalResult);
                       });
                     }
+                    if (isComplete || isFailed) {
+                      resolvePendingTool(isFailed ? 'failed' : 'completed');
+                    }
                   }
                   return;
                 }
@@ -569,6 +608,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                         u("conversationMap", toolBubbleId, "toolFormerData", "additionalData", "status", finalStatus === 'completed' ? 'success' : 'error');
                       });
                     }
+                    resolvePendingTool(isFailed ? 'failed' : 'completed');
                   }
 
                   return;
@@ -674,6 +714,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                         u("conversationMap", toolBubbleId, "toolFormerData", "additionalData", "status", finalStatus === 'completed' ? 'success' : 'error');
                       });
                     }
+                    resolvePendingTool(isFailed ? 'failed' : 'completed');
                   }
 
                   return;
@@ -801,11 +842,12 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                       };
 
                       // Generate IDs and store content
-                      (async () => {
-                        const beforeHash = await hashContent(beforeContent);
-                        const afterHash = await hashContent(afterContent);
-                        const beforeContentId = `composer.content.${beforeHash}`;
-                        const afterContentId = `composer.content.${afterHash}`;
+                      const finalizePromise = (async () => {
+                        try {
+                          const beforeHash = await hashContent(beforeContent);
+                          const afterHash = await hashContent(afterContent);
+                          const beforeContentId = `composer.content.${beforeHash}`;
+                          const afterContentId = `composer.content.${afterHash}`;
 
                         // Store content in cursorDiskKV using Cursor's storage service
                         try {
@@ -915,7 +957,13 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                             window.acpLog?.('INFO', '[ACP] 📋 Plan bubble updated with CREATE_PLAN_TYPE (43), planUri:', planUri, 'todos:', todos.length);
                           }
                         }
+                        } finally {
+                          resolvePendingTool(isFailed ? 'failed' : 'completed');
+                        }
                       })();
+                      trackFinalizer(finalizePromise, `edit:${toolCallId?.slice(0, 8) || toolCallId}`);
+                    } else {
+                      resolvePendingTool(isFailed ? 'failed' : 'completed');
                     }
                   }
 
@@ -924,25 +972,26 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
 
                 // ===== GREP TOOL (Type 41) =====
                 if (isGrepTool) {
-                  // Skip if no pattern yet (initial pending event)
-                  if (isNew && !s.toolBubbles.has(toolCallId) && !inputObj.pattern) {
-                    return;
-                  }
-
-                  // Store grep data when we receive it
-                  if (isNew && inputObj.pattern) {
+                  // Store grep data whenever we receive it (even if incomplete initially)
+                  if (inputObj && Object.keys(inputObj).length > 0) {
                     if (!s.grepData) s.grepData = new Map();
+
+                    // Merge new data with existing data (in case parameters come in stages)
+                    const existing = s.grepData.get(toolCallId) || {};
                     s.grepData.set(toolCallId, {
-                      pattern: inputObj.pattern,
-                      path: inputObj.path || '.',
-                      outputMode: inputObj.output_mode || 'content',
-                      caseInsensitive: inputObj['-i'] || false,
-                      headLimit: inputObj.head_limit
+                      pattern: inputObj.pattern || existing.pattern,
+                      path: inputObj.path || existing.path || '.',
+                      outputMode: inputObj.output_mode || existing.outputMode || 'content',
+                      caseInsensitive: inputObj['-i'] ?? existing.caseInsensitive ?? false,
+                      headLimit: inputObj.head_limit ?? existing.headLimit
                     });
-                    window.acpDebug?.( '[ACP] Stored grep data for', toolCallId, 'pattern:', inputObj.pattern);
+                    window.acpDebug?.( '[ACP] Updated grep data for', toolCallId, 'pattern:', inputObj.pattern || existing.pattern);
                   }
 
-                  if (isNew && !s.toolBubbles.has(toolCallId)) {
+                  const grepData = s.grepData?.get(toolCallId) || {};
+
+                  // Only create bubble if we have the pattern (defer until we have enough data)
+                  if (isNew && !s.toolBubbles.has(toolCallId) && grepData.pattern) {
                     s.bubbleId = null;
                     s.text = '';
 
@@ -952,7 +1001,6 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                     if (!s.toolTypes) s.toolTypes = new Map();
                     s.toolTypes.set(toolCallId, { isGrep: true });
 
-                    const grepData = s.grepData?.get(toolCallId) || {};
                     window.acpDebug?.( '[ACP] Grep creating bubble - pattern:', grepData.pattern, 'path:', grepData.path);
 
                     // Match Cursor's expected format for grep (Type 41)
@@ -1766,7 +1814,12 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                     });
                   }
                 }
+              } finally {
+                if (isComplete || isFailed) {
+                  resolvePendingTool(isFailed ? 'failed' : 'completed');
+                }
               }
+            }
               ,
               onPlan: (planUpdate) => {
                 const s = window[stateKey];
@@ -1839,6 +1892,12 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                   u("currentModeId", currentModeId);
                   u("modeId", currentModeId);
                 });
+              },
+              onDone: () => {
+                const s = window[stateKey];
+                if (!s) return;
+                s.streamDone = true;
+                window.acpDebug?.('[ACP] ✅ end_turn received');
               }
             }
             ,
@@ -1850,6 +1909,29 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
           }
 
           window.acpLog?.('INFO', '[ACP] Response complete');
+          const s = window[stateKey];
+          if (s) {
+            const startWaitEnd = Date.now();
+            const maxWaitEndMs = 20000;
+            while (!s.streamDone) {
+              if (Date.now() - startWaitEnd > maxWaitEndMs) {
+                window.acpLog?.('WARN', '[ACP] Timed out waiting for end_turn');
+                break;
+              }
+              await new Promise(r => setTimeout(r, 200));
+            }
+            const startWaitTools = Date.now();
+            const maxWaitToolsMs = 20000;
+            window.acpDebug?.('[ACP] ⏱️ Waiting for pending tool finalizers...', 'pending=', s.pendingToolCalls?.size || 0, 'finalizers=', s.pendingFinalizers?.size || 0);
+            while ((s.pendingToolCalls?.size || 0) > 0 || (s.pendingFinalizers?.size || 0) > 0) {
+              if (Date.now() - startWaitTools > maxWaitToolsMs) {
+                window.acpLog?.('WARN', '[ACP] Pending tool finalizers timeout', 'pending=', s.pendingToolCalls?.size || 0, 'finalizers=', s.pendingFinalizers?.size || 0);
+                break;
+              }
+              await new Promise(r => setTimeout(r, 200));
+            }
+            window.acpDebug?.('[ACP] ✅ Pending tools complete', 'pending=', s.pendingToolCalls?.size || 0, 'finalizers=', s.pendingFinalizers?.size || 0);
+          }
           this._composerDataService.updateComposerDataSetStore({{e}}, o => {
             o("status", "completed");
             o("generatingBubbleIds", []);
