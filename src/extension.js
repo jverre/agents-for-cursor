@@ -125,12 +125,32 @@ class ACPAgentManager {
 
                 // Handle permission requests from agent - auto-approve all
                 if (message.method === 'session/request_permission' && message.id !== undefined) {
-                    acpLog('INFO', '[ACP] Auto-approving permission request:', message.params?.permission?.kind);
+                    const params = message.params || {};
+                    // New format (0.13.x): uses options array with optionId
+                    // Old format: uses permission.kind
+                    const permissionKind = params.permission?.kind || params.toolCall?.title || 'unknown';
+                    acpLog('INFO', '[ACP] Auto-approving permission request:', permissionKind);
+
+                    // Find the "allow_always" or "allow" option from the options array
+                    let optionId = 'allow_always'; // default fallback
+                    if (params.options && Array.isArray(params.options)) {
+                        const allowAlways = params.options.find(o => o.kind === 'allow_always' || o.optionId === 'allow_always');
+                        const allowOnce = params.options.find(o => o.kind === 'allow_once' || o.optionId === 'allow');
+                        optionId = allowAlways?.optionId || allowOnce?.optionId || 'allow_always';
+                    }
+
+                    // ACP protocol format: outcome.outcome = "selected", outcome.optionId = chosen option
                     const response = {
                         jsonrpc: '2.0',
                         id: message.id,
-                        result: { granted: true }
+                        result: {
+                            outcome: {
+                                outcome: 'selected',
+                                optionId: optionId
+                            }
+                        }
                     };
+                    acpLog('DEBUG', '[ACP] Permission response:', JSON.stringify(response.result));
                     agent.process.stdin.write(JSON.stringify(response) + '\n');
                 }
 
@@ -282,6 +302,9 @@ class ACPAgentManager {
                     // Log tool events for debugging
                     if (update?.sessionUpdate === 'tool_call' || update?.sessionUpdate === 'tool_call_update') {
                         acpLog('INFO', '[ACP] Tool event:', update.sessionUpdate, '| id:', update.toolCallId?.slice(0, 8), '| status:', update.status, '| kind:', update.kind);
+                        if (update.status === 'failed') {
+                            acpLog('ERROR', '[ACP] Tool FAILED - full update:', JSON.stringify(update, null, 2));
+                        }
                     }
 
                     // Forward to session-specific listener (routes by sessionId to avoid race conditions)
@@ -656,6 +679,7 @@ async function activate(context) {
             req.on('end', async () => {
                 try {
                     const { provider, message, composerId, stream, modeId } = JSON.parse(body);
+                    acpLog('INFO', '[ACP] /acp/sendMessage received | stream:', stream, '| modeId:', modeId, '| composerId:', composerId?.slice(0, 8));
 
                     if (stream) {
                         // Streaming mode - send chunks as NDJSON
@@ -687,13 +711,13 @@ async function activate(context) {
                             const normalizedModeId = normalizeModeId(modeId);
                             const effectiveModeId = normalizedModeId || 'bypassPermissions';
                             acpLog('INFO', '[ACP] Setting permission mode:', effectiveModeId, '| raw:', modeId);
-                            await agentManager.sendRequest(agent, 'session/set_mode', {
+                            const modeResult = await agentManager.sendRequest(agent, 'session/set_mode', {
                                 sessionId: sessionId,
                                 modeId: effectiveModeId
                             });
-                            console.log(`[ACP] Set permission mode to ${effectiveModeId} for session ${sessionId}`);
+                            acpLog('INFO', `[ACP] Set permission mode to ${effectiveModeId} for session ${sessionId} | result:`, JSON.stringify(modeResult));
                         } catch (err) {
-                            console.log(`[ACP] Could not set permission mode: ${err.message}`);
+                            acpLog('ERROR', `[ACP] Could not set permission mode: ${err.message}`);
                         }
 
                         // Register session-specific streaming listener (keyed by sessionId to avoid race conditions)
