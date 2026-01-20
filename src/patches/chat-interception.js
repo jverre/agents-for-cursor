@@ -34,15 +34,37 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
         if (originalUpdateBubble && !svc._acpBubbleHooked) {
           svc._acpBubbleHooked = true;
           svc.updateComposerBubble = function(composerHandle, bubbleId, updates) {
-            // Debug: log all updateComposerBubble calls to see what data flows through
-            window.acpDebug?.('[ACP] updateComposerBubble called:', JSON.stringify({
-              bubbleId: bubbleId?.slice?.(0, 12) || bubbleId,
-              updateKeys: updates ? Object.keys(updates) : [],
-              hasTokenCount: !!updates?.tokenCount,
-              hasUsageUuid: !!updates?.usageUuid,
-              tokenCount: updates?.tokenCount,
-              usageUuid: updates?.usageUuid?.slice?.(0, 12)
-            }));
+            // Debug: log ALL updateComposerBubble calls with full update object
+            try {
+              // Create a safe copy of updates for logging (handle circular refs)
+              const safeUpdates = {};
+              if (updates) {
+                for (const key of Object.keys(updates)) {
+                  const val = updates[key];
+                  if (val === null || val === undefined) {
+                    safeUpdates[key] = val;
+                  } else if (typeof val === 'function') {
+                    safeUpdates[key] = '[Function]';
+                  } else if (typeof val === 'object') {
+                    try {
+                      // Try to stringify, but limit depth
+                      safeUpdates[key] = JSON.parse(JSON.stringify(val));
+                    } catch {
+                      safeUpdates[key] = '[Object - circular or too deep]';
+                    }
+                  } else {
+                    safeUpdates[key] = val;
+                  }
+                }
+              }
+              window.acpDebug?.('[ACP] updateComposerBubble FULL:', JSON.stringify({
+                bubbleId: bubbleId,
+                composerId: composerHandle?.composerId?.slice?.(0, 12),
+                updates: safeUpdates
+              }, null, 2));
+            } catch (e) {
+              window.acpDebug?.('[ACP] updateComposerBubble (logging error):', e.message, 'bubbleId=' + bubbleId);
+            }
             
             // Capture tokenCount updates from Cursor native models
             if (updates?.tokenCount) {

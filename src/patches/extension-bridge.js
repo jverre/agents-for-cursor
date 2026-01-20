@@ -594,12 +594,35 @@ Cost: $${usage.total_cost_usd.toFixed(4)}`;
       }
 
       svc.updateComposerBubble = function(composerHandle, bubbleId, updates) {
-        // Debug: log all bubble updates to trace data flow
+        // Debug: log ALL bubble updates with full content for debugging
         if (window.ACP_DEBUG) {
-          window.acpLog?.('DEBUG', '[ACP] [Bridge] updateComposerBubble: bubbleId=' + (bubbleId?.slice?.(0, 12) || bubbleId) + 
-            ' keys=' + (updates ? Object.keys(updates).join(',') : 'none') +
-            ' hasTokenCount=' + !!updates?.tokenCount +
-            ' hasUsageUuid=' + !!updates?.usageUuid);
+          try {
+            const safeUpdates = {};
+            if (updates) {
+              for (const key of Object.keys(updates)) {
+                const val = updates[key];
+                if (val === null || val === undefined) {
+                  safeUpdates[key] = val;
+                } else if (typeof val === 'function') {
+                  safeUpdates[key] = '[Function]';
+                } else if (typeof val === 'object') {
+                  try {
+                    safeUpdates[key] = JSON.parse(JSON.stringify(val));
+                  } catch {
+                    safeUpdates[key] = '[Object]';
+                  }
+                } else {
+                  safeUpdates[key] = val;
+                }
+              }
+            }
+            window.acpLog?.('DEBUG', '[ACP] [Bridge] updateComposerBubble FULL: ' + JSON.stringify({
+              bubbleId: bubbleId,
+              updates: safeUpdates
+            }, null, 2));
+          } catch (e) {
+            window.acpLog?.('DEBUG', '[ACP] [Bridge] updateComposerBubble: bubbleId=' + bubbleId + ' (logging error: ' + e.message + ')');
+          }
         }
         
         // Check if this update contains tokenCount data
