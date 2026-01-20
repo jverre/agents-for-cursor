@@ -29,6 +29,95 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
         }
         window._cursorComposerDataService = svc;
         
+        // Expose aiClientService for token usage polling
+        if (this._aiClientService) {
+          window._cursorAiClientService = this._aiClientService;
+          window.acpLog?.('INFO', '[ACP] ✅ Exposed _aiClientService for token polling');
+        }
+        
+        // Token polling function for real-time updates
+        const startTokenPolling = (bubbleId, usageUuid) => {
+          if (!window._cursorAiClientService?.getTokenUsage) {
+            window.acpLog?.('WARN', '[ACP] Cannot poll - aiClientService not available');
+            return;
+          }
+          
+          // Track active polling sessions
+          if (!window._acpActivePolling) window._acpActivePolling = new Set();
+          if (window._acpActivePolling.has(bubbleId)) {
+            window.acpDebug?.('[ACP] Already polling for bubbleId=' + bubbleId.slice(0, 12));
+            return;
+          }
+          window._acpActivePolling.add(bubbleId);
+          
+          let pollCount = 0;
+          const maxPolls = 60; // Max 60 polls (30 seconds at 500ms interval)
+          const pollInterval = 500; // Poll every 500ms
+          let lastInputTokens = 0;
+          let lastOutputTokens = 0;
+          
+          const poll = async () => {
+            if (pollCount >= maxPolls) {
+              window.acpLog?.('INFO', '[ACP] 🛑 Token polling stopped (max polls reached) for bubbleId=' + bubbleId.slice(0, 12));
+              window._acpActivePolling.delete(bubbleId);
+              return;
+            }
+            
+            try {
+              const result = await window._cursorAiClientService.getTokenUsage({ usageUuid });
+              const { inputTokens, outputTokens } = result;
+              
+              // Only update if tokens changed
+              if (inputTokens !== lastInputTokens || outputTokens !== lastOutputTokens) {
+                lastInputTokens = inputTokens;
+                lastOutputTokens = outputTokens;
+                
+                window.acpLog?.('INFO', '[ACP] 📊 Token poll #' + pollCount + ': in=' + inputTokens + ' out=' + outputTokens + ' bubbleId=' + bubbleId.slice(0, 12));
+                
+                // Update token display
+                if (!window.acpTokenUsage) window.acpTokenUsage = {};
+                const existing = window.acpTokenUsage[bubbleId];
+                
+                // Only update if not from ACP SDK (which has more detailed data)
+                if (!existing || existing.source === 'cursor' || existing.source === 'cursor_polling' || !existing.source) {
+                  window.acpTokenUsage[bubbleId] = {
+                    prompt_tokens: inputTokens || 0,
+                    completion_tokens: outputTokens || 0,
+                    total_tokens: (inputTokens || 0) + (outputTokens || 0),
+                    source: 'cursor_polling'
+                  };
+                  
+                  // Trigger UI update
+                  window.acpUpdateAllTokenDisplays?.();
+                }
+                
+                // If we got non-zero tokens and they haven't changed for 2 polls, stop polling
+                if (inputTokens > 0 && outputTokens > 0) {
+                  // Check if response is complete (tokens stabilized)
+                  if (pollCount > 2) {
+                    window.acpLog?.('INFO', '[ACP] ✅ Token polling complete: in=' + inputTokens + ' out=' + outputTokens);
+                    window._acpActivePolling.delete(bubbleId);
+                    return;
+                  }
+                }
+              }
+              
+              pollCount++;
+              setTimeout(poll, pollInterval);
+            } catch (error) {
+              window.acpDebug?.('[ACP] Token poll error:', error.message);
+              pollCount++;
+              setTimeout(poll, pollInterval);
+            }
+          };
+          
+          // Start polling after a short delay
+          setTimeout(poll, 200);
+        };
+        
+        // Expose polling function globally
+        window._acpStartTokenPolling = startTokenPolling;
+        
         // Hook updateComposerBubble for direct token updates
         const originalUpdateBubble = svc.updateComposerBubble?.bind(svc);
         if (originalUpdateBubble && !svc._acpBubbleHooked) {
@@ -137,6 +226,12 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                   // Store for potential token fetching
                   if (!window.acpUsageUuids) window.acpUsageUuids = {};
                   window.acpUsageUuids[bubbleId] = bubble.usageUuid;
+                  
+                  // Start polling for real-time token updates
+                  if (window._cursorAiClientService?.getTokenUsage && window._acpStartTokenPolling) {
+                    window.acpLog?.('INFO', '[ACP] 🔄 Starting token polling for bubbleId=' + bubbleId.slice(0, 12));
+                    window._acpStartTokenPolling(bubbleId, bubble.usageUuid);
+                  }
                 }
                 
                 // Check for plan data
