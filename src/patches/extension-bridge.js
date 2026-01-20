@@ -113,7 +113,10 @@ try {
     }
     
     // Update tooltip with detailed breakdown
-    let tooltip = `Token usage (from Claude SDK)
+    const sourceLabel = usage.source === 'cursor' ? 'from Cursor' : 
+                       usage.source === 'sdk' || usage.source === 'sdk_final' ? 'from Claude SDK' : 
+                       'estimated';
+    let tooltip = `Token usage (${sourceLabel})
 Input:  ${usage.prompt_tokens || 0}
 Output: ${usage.completion_tokens || 0}`;
     
@@ -500,6 +503,139 @@ Cost: $${usage.total_cost_usd.toFixed(4)}`;
   
   // Set up observer after a short delay to ensure DOM is ready
   setTimeout(setupTokenDisplayObserver, 1000);
+
+  // ===== CURSOR NATIVE MODEL TOKEN TRACKING =====
+  // Hook into composerDataService to capture tokenCount updates from Cursor's native models
+  const setupCursorTokenTracking = () => {
+    // Find the composerDataService - it's available on window or via React internals
+    const findComposerDataService = () => {
+      // Try to find it through the React fiber tree or global services
+      // Cursor exposes some services globally
+      if (window._cursorComposerDataService) {
+        return window._cursorComposerDataService;
+      }
+      return null;
+    };
+
+    // Hook updateComposerBubble to capture token updates
+    const hookUpdateComposerBubble = (svc) => {
+      if (!svc || svc._acpTokenHooked) return;
+      
+      const originalUpdateBubble = svc.updateComposerBubble?.bind(svc);
+      if (!originalUpdateBubble) {
+        window.acpLog?.('WARN', '[ACP] updateComposerBubble not found on service');
+        return;
+      }
+
+      svc.updateComposerBubble = function(composerHandle, bubbleId, updates) {
+        // Check if this update contains tokenCount data
+        if (updates?.tokenCount) {
+          const { inputTokens, outputTokens } = updates.tokenCount;
+          window.acpLog?.('INFO', '[ACP] 📊 Cursor tokenCount update: bubbleId=' + bubbleId?.slice(0, 8) + ' input=' + inputTokens + ' output=' + outputTokens);
+          
+          // Find the message ID associated with this bubble
+          // The bubble might be an AI response bubble, we need to find the associated human message
+          const bubble = composerHandle?.data?.conversationMap?.get?.(bubbleId) || 
+                        composerHandle?.data?.conversationMap?.[bubbleId];
+          
+          // Try to find the requestId which links to the human message
+          const requestId = bubble?.requestId || bubbleId;
+          
+          if (requestId) {
+            if (!window.acpTokenUsage) window.acpTokenUsage = {};
+            
+            // Only update if we don't already have SDK data (ACP models)
+            const existing = window.acpTokenUsage[requestId];
+            if (!existing || existing.source === 'cursor' || !existing.source) {
+              window.acpTokenUsage[requestId] = {
+                prompt_tokens: inputTokens || 0,
+                completion_tokens: outputTokens || 0,
+                total_tokens: (inputTokens || 0) + (outputTokens || 0),
+                source: 'cursor'  // Mark as from Cursor's native tracking
+              };
+              
+              // Update display
+              updateTokenDisplayForMessage(requestId);
+            }
+          }
+        }
+        
+        // Call original method
+        return originalUpdateBubble(composerHandle, bubbleId, updates);
+      };
+      
+      svc._acpTokenHooked = true;
+      window.acpLog?.('INFO', '[ACP] ✅ Hooked updateComposerBubble for native model token tracking');
+    };
+
+    // Hook updateComposerDataSetStore to capture tokenCount in nested updates
+    const hookUpdateDataSetStore = (svc) => {
+      if (!svc || svc._acpDataSetStoreHooked) return;
+      
+      const originalUpdate = svc.updateComposerDataSetStore?.bind(svc);
+      if (!originalUpdate) return;
+
+      svc.updateComposerDataSetStore = function(composerId, updater) {
+        // Wrap the updater to intercept tokenCount updates
+        const wrappedUpdater = (...args) => {
+          // Check if this is a tokenCount update
+          // Format: u("conversationMap", bubbleId, "tokenCount", { inputTokens, outputTokens })
+          if (args[0] === 'conversationMap' && args[2] === 'tokenCount' && args[3]) {
+            const bubbleId = args[1];
+            const tokenCount = args[3];
+            window.acpLog?.('INFO', '[ACP] 📊 Cursor tokenCount (via DataSetStore): bubbleId=' + bubbleId?.slice(0, 8) + ' input=' + tokenCount.inputTokens + ' output=' + tokenCount.outputTokens);
+            
+            if (bubbleId) {
+              if (!window.acpTokenUsage) window.acpTokenUsage = {};
+              
+              const existing = window.acpTokenUsage[bubbleId];
+              if (!existing || existing.source === 'cursor' || !existing.source) {
+                window.acpTokenUsage[bubbleId] = {
+                  prompt_tokens: tokenCount.inputTokens || 0,
+                  completion_tokens: tokenCount.outputTokens || 0,
+                  total_tokens: (tokenCount.inputTokens || 0) + (tokenCount.outputTokens || 0),
+                  source: 'cursor'
+                };
+                
+                // Schedule display update
+                requestAnimationFrame(() => {
+                  updateTokenDisplayForMessage(bubbleId);
+                  updateAllTokenDisplays();
+                });
+              }
+            }
+          }
+          
+          return updater(...args);
+        };
+        
+        return originalUpdate(composerId, wrappedUpdater);
+      };
+      
+      svc._acpDataSetStoreHooked = true;
+      window.acpLog?.('INFO', '[ACP] ✅ Hooked updateComposerDataSetStore for native model token tracking');
+    };
+
+    // Try to hook immediately if service is available
+    const svc = findComposerDataService();
+    if (svc) {
+      hookUpdateComposerBubble(svc);
+      hookUpdateDataSetStore(svc);
+    }
+
+    // Also expose a function for chat-interception.js to call when it has access to the service
+    window._acpHookComposerService = (service) => {
+      if (!service) return;
+      window._cursorComposerDataService = service;
+      hookUpdateComposerBubble(service);
+      hookUpdateDataSetStore(service);
+    };
+    
+    window.acpLog?.('INFO', '[ACP] Cursor native model token tracking setup complete');
+  };
+
+  // Set up Cursor token tracking after a delay
+  setTimeout(setupCursorTokenTracking, 500);
 
   window.acpLog?.('INFO', "[ACP] Extension bridge installed - using HTTP on localhost:37842");
 

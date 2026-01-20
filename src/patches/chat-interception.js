@@ -16,12 +16,51 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
       const composerHandle = this._composerDataService.getWeakHandleOptimistic({{e}});
       const modelName = {{n}}?.modelOverride || composerHandle?.data?.modelConfig?.modelName || '';
 
-      // Install plan payload logger (helps capture Auto model plan bubble format)
-      const installPlanLogger = () => {
-        if (window._acpPlanLoggerInstalled || !this._composerDataService) return;
-        window._acpPlanLoggerInstalled = true;
+      // Install plan payload logger and token tracking hook
+      const installServiceHooks = () => {
+        if (window._acpServiceHooksInstalled || !this._composerDataService) return;
+        window._acpServiceHooksInstalled = true;
         window._acpPlanLoggedBubbles = window._acpPlanLoggedBubbles || new Set();
         const svc = this._composerDataService;
+        
+        // Expose service for extension-bridge token tracking
+        if (window._acpHookComposerService) {
+          window._acpHookComposerService(svc);
+        }
+        window._cursorComposerDataService = svc;
+        
+        // Hook updateComposerBubble for direct token updates
+        const originalUpdateBubble = svc.updateComposerBubble?.bind(svc);
+        if (originalUpdateBubble && !svc._acpBubbleHooked) {
+          svc._acpBubbleHooked = true;
+          svc.updateComposerBubble = function(composerHandle, bubbleId, updates) {
+            // Capture tokenCount updates from Cursor native models
+            if (updates?.tokenCount) {
+              const { inputTokens, outputTokens } = updates.tokenCount;
+              window.acpLog?.('INFO', '[ACP] 📊 Cursor native tokenCount: bubbleId=' + (bubbleId?.slice?.(0, 8) || bubbleId) + ' input=' + inputTokens + ' output=' + outputTokens);
+              
+              // Store token data for display
+              if (bubbleId) {
+                if (!window.acpTokenUsage) window.acpTokenUsage = {};
+                const existing = window.acpTokenUsage[bubbleId];
+                // Only update if not from ACP SDK (which has more detailed data)
+                if (!existing || existing.source === 'cursor' || !existing.source) {
+                  window.acpTokenUsage[bubbleId] = {
+                    prompt_tokens: inputTokens || 0,
+                    completion_tokens: outputTokens || 0,
+                    total_tokens: (inputTokens || 0) + (outputTokens || 0),
+                    source: 'cursor'
+                  };
+                  // Trigger UI update
+                  window.acpUpdateAllTokenDisplays?.();
+                }
+              }
+            }
+            return originalUpdateBubble(composerHandle, bubbleId, updates);
+          };
+          window.acpLog?.('INFO', '[ACP] ✅ Hooked updateComposerBubble for Cursor native token tracking');
+        }
+        
         const originalUpdate = svc.updateComposerDataSetStore?.bind(svc);
         if (!originalUpdate) return;
         svc.updateComposerDataSetStore = (handle, updater) => {
@@ -49,7 +88,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
           return result;
         };
       };
-      installPlanLogger();
+      installServiceHooks();
 
       // Track current model for slash command filtering
       if (window.acpSlashCommandIntegration?.setCurrentModel) {
