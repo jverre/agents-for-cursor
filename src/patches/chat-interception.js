@@ -34,6 +34,16 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
         if (originalUpdateBubble && !svc._acpBubbleHooked) {
           svc._acpBubbleHooked = true;
           svc.updateComposerBubble = function(composerHandle, bubbleId, updates) {
+            // Debug: log all updateComposerBubble calls to see what data flows through
+            window.acpDebug?.('[ACP] updateComposerBubble called:', JSON.stringify({
+              bubbleId: bubbleId?.slice?.(0, 12) || bubbleId,
+              updateKeys: updates ? Object.keys(updates) : [],
+              hasTokenCount: !!updates?.tokenCount,
+              hasUsageUuid: !!updates?.usageUuid,
+              tokenCount: updates?.tokenCount,
+              usageUuid: updates?.usageUuid?.slice?.(0, 12)
+            }));
+            
             // Capture tokenCount updates from Cursor native models
             if (updates?.tokenCount) {
               const { inputTokens, outputTokens } = updates.tokenCount;
@@ -43,6 +53,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
               if (bubbleId) {
                 if (!window.acpTokenUsage) window.acpTokenUsage = {};
                 const existing = window.acpTokenUsage[bubbleId];
+                window.acpDebug?.('[ACP] Token storage check: existing=' + JSON.stringify(existing) + ' source=' + existing?.source);
                 // Only update if not from ACP SDK (which has more detailed data)
                 if (!existing || existing.source === 'cursor' || !existing.source) {
                   window.acpTokenUsage[bubbleId] = {
@@ -51,11 +62,23 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                     total_tokens: (inputTokens || 0) + (outputTokens || 0),
                     source: 'cursor'
                   };
+                  window.acpDebug?.('[ACP] Stored token usage for bubbleId=' + bubbleId?.slice?.(0, 8));
                   // Trigger UI update
                   window.acpUpdateAllTokenDisplays?.();
+                } else {
+                  window.acpDebug?.('[ACP] Skipped token update - already have SDK data');
                 }
               }
             }
+            
+            // Also capture usageUuid for potential future cost fetching
+            if (updates?.usageUuid) {
+              window.acpLog?.('INFO', '[ACP] 📋 usageUuid received: bubbleId=' + (bubbleId?.slice?.(0, 8) || bubbleId) + ' uuid=' + updates.usageUuid?.slice?.(0, 12));
+              // Store usageUuid for potential API call to get cost data
+              if (!window.acpUsageUuids) window.acpUsageUuids = {};
+              window.acpUsageUuids[bubbleId] = updates.usageUuid;
+            }
+            
             return originalUpdateBubble(composerHandle, bubbleId, updates);
           };
           window.acpLog?.('INFO', '[ACP] ✅ Hooked updateComposerBubble for Cursor native token tracking');

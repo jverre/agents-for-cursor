@@ -528,6 +528,14 @@ Cost: $${usage.total_cost_usd.toFixed(4)}`;
       }
 
       svc.updateComposerBubble = function(composerHandle, bubbleId, updates) {
+        // Debug: log all bubble updates to trace data flow
+        if (window.ACP_DEBUG) {
+          window.acpLog?.('DEBUG', '[ACP] [Bridge] updateComposerBubble: bubbleId=' + (bubbleId?.slice?.(0, 12) || bubbleId) + 
+            ' keys=' + (updates ? Object.keys(updates).join(',') : 'none') +
+            ' hasTokenCount=' + !!updates?.tokenCount +
+            ' hasUsageUuid=' + !!updates?.usageUuid);
+        }
+        
         // Check if this update contains tokenCount data
         if (updates?.tokenCount) {
           const { inputTokens, outputTokens } = updates.tokenCount;
@@ -540,6 +548,11 @@ Cost: $${usage.total_cost_usd.toFixed(4)}`;
           
           // Try to find the requestId which links to the human message
           const requestId = bubble?.requestId || bubbleId;
+          
+          if (window.ACP_DEBUG) {
+            window.acpLog?.('DEBUG', '[ACP] [Bridge] Token bubble lookup: requestId=' + (requestId?.slice?.(0, 12) || requestId) + 
+              ' bubbleType=' + bubble?.type + ' hasRequestId=' + !!bubble?.requestId);
+          }
           
           if (requestId) {
             if (!window.acpTokenUsage) window.acpTokenUsage = {};
@@ -554,10 +567,23 @@ Cost: $${usage.total_cost_usd.toFixed(4)}`;
                 source: 'cursor'  // Mark as from Cursor's native tracking
               };
               
+              if (window.ACP_DEBUG) {
+                window.acpLog?.('DEBUG', '[ACP] [Bridge] Stored Cursor token data for ' + requestId?.slice?.(0, 8));
+              }
+              
               // Update display
               updateTokenDisplayForMessage(requestId);
+            } else if (window.ACP_DEBUG) {
+              window.acpLog?.('DEBUG', '[ACP] [Bridge] Skipped - already have ' + existing.source + ' data');
             }
           }
+        }
+        
+        // Capture usageUuid for future cost API calls
+        if (updates?.usageUuid) {
+          window.acpLog?.('INFO', '[ACP] 📋 [Bridge] usageUuid: bubbleId=' + (bubbleId?.slice?.(0, 8) || bubbleId) + ' uuid=' + updates.usageUuid?.slice?.(0, 12));
+          if (!window.acpUsageUuids) window.acpUsageUuids = {};
+          window.acpUsageUuids[bubbleId] = updates.usageUuid;
         }
         
         // Call original method
@@ -578,6 +604,12 @@ Cost: $${usage.total_cost_usd.toFixed(4)}`;
       svc.updateComposerDataSetStore = function(composerId, updater) {
         // Wrap the updater to intercept tokenCount updates
         const wrappedUpdater = (...args) => {
+          // Debug: log all DataSetStore updates to trace data flow
+          if (window.ACP_DEBUG && args[0] === 'conversationMap') {
+            window.acpLog?.('DEBUG', '[ACP] [Bridge] DataSetStore update: path=' + args.slice(0, 3).join('/') + 
+              ' isTokenCount=' + (args[2] === 'tokenCount'));
+          }
+          
           // Check if this is a tokenCount update
           // Format: u("conversationMap", bubbleId, "tokenCount", { inputTokens, outputTokens })
           if (args[0] === 'conversationMap' && args[2] === 'tokenCount' && args[3]) {
@@ -589,6 +621,10 @@ Cost: $${usage.total_cost_usd.toFixed(4)}`;
               if (!window.acpTokenUsage) window.acpTokenUsage = {};
               
               const existing = window.acpTokenUsage[bubbleId];
+              if (window.ACP_DEBUG) {
+                window.acpLog?.('DEBUG', '[ACP] [Bridge] DataSetStore token check: existing=' + !!existing + ' source=' + existing?.source);
+              }
+              
               if (!existing || existing.source === 'cursor' || !existing.source) {
                 window.acpTokenUsage[bubbleId] = {
                   prompt_tokens: tokenCount.inputTokens || 0,
@@ -596,6 +632,10 @@ Cost: $${usage.total_cost_usd.toFixed(4)}`;
                   total_tokens: (tokenCount.inputTokens || 0) + (tokenCount.outputTokens || 0),
                   source: 'cursor'
                 };
+                
+                if (window.ACP_DEBUG) {
+                  window.acpLog?.('DEBUG', '[ACP] [Bridge] DataSetStore stored token data for ' + bubbleId?.slice?.(0, 8));
+                }
                 
                 // Schedule display update
                 requestAnimationFrame(() => {
