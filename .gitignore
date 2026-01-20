@@ -22,3 +22,9 @@ tests/e2e-user-data/
 
 .DS_Store
 tests/temp/
+
+# Vendor temp directory (used during vendoring process)
+.vendor-temp/
+
+# Vendor dependencies (installed at runtime)
+vendor/*/node_modules/

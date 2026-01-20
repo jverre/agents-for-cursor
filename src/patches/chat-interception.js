@@ -1897,6 +1897,14 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                 const s = window[stateKey];
                 if (!s) return;
                 s.streamDone = true;
+
+                // Log token usage
+                const usage = window.acpTokenUsage?.[{{e}}];
+                if (usage) {
+                  window.acpLog?.('INFO', '[ACP] 📊 Token usage:', JSON.stringify(usage));
+                  s.tokenUsage = usage;
+                }
+
                 window.acpDebug?.('[ACP] ✅ end_turn received');
               }
             }
@@ -1936,6 +1944,12 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
             o("status", "completed");
             o("generatingBubbleIds", []);
             o("chatGenerationUUID", void 0);
+
+            // Attach token usage
+            const usage = window.acpTokenUsage?.[{{e}}];
+            if (usage) {
+              o("lastTokenUsage", usage);
+            }
           });
 
           window.acpLog?.('INFO', '[ACP] Message completed successfully');

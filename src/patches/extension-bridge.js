@@ -21,10 +21,209 @@ try {
   // Simple bridge using HTTP localhost communication
   // Extension will run a local server on port 37842
 
+  // Token display UI - we only use real SDK data, no estimation
+  const formatTokenCount = (count) => {
+    if (count >= 1000000) return (count / 1000000).toFixed(1) + 'm';
+    if (count >= 1000) return (count / 1000).toFixed(1) + 'k';
+    return count.toString();
+  };
+
+  const createTokenDisplay = (id) => {
+    const container = document.createElement('div');
+    container.id = id;
+    container.className = 'acp-token-display';
+    container.style.cssText = `
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      font-size: 10px;
+      font-family: var(--vscode-font-family);
+      color: var(--vscode-descriptionForeground);
+      opacity: 0.7;
+      cursor: default;
+      user-select: none;
+      white-space: nowrap;
+    `;
+    container.title = 'Token usage';
+    
+    // Build DOM elements manually to avoid innerHTML (Trusted Types)
+    const upArrow = document.createElement('span');
+    upArrow.style.opacity = '0.6';
+    upArrow.textContent = '↑';
+    
+    const inCount = document.createElement('span');
+    inCount.className = 'acp-token-in';
+    inCount.textContent = '0';
+    
+    const downArrow = document.createElement('span');
+    downArrow.style.opacity = '0.6';
+    downArrow.textContent = '↓';
+    
+    const outCount = document.createElement('span');
+    outCount.className = 'acp-token-out';
+    outCount.textContent = '0';
+    
+    // Cost display (hidden by default, shown when SDK provides cost)
+    const costSeparator = document.createElement('span');
+    costSeparator.className = 'acp-token-cost-sep';
+    costSeparator.style.cssText = 'opacity: 0.4; margin-left: 2px; display: none;';
+    costSeparator.textContent = '|';
+    
+    const costDisplay = document.createElement('span');
+    costDisplay.className = 'acp-token-cost';
+    costDisplay.style.cssText = 'color: var(--vscode-charts-green); display: none;';
+    costDisplay.textContent = '';
+    
+    container.appendChild(upArrow);
+    container.appendChild(inCount);
+    container.appendChild(downArrow);
+    container.appendChild(outCount);
+    container.appendChild(costSeparator);
+    container.appendChild(costDisplay);
+    
+    return container;
+  };
+
+  const updateSingleDisplay = (display, usage) => {
+    if (!display || !usage) return;
+    
+    const inEl = display.querySelector('.acp-token-in');
+    const outEl = display.querySelector('.acp-token-out');
+    const costSep = display.querySelector('.acp-token-cost-sep');
+    const costEl = display.querySelector('.acp-token-cost');
+    
+    // Show input tokens from SDK
+    if (inEl) {
+      inEl.textContent = formatTokenCount(usage.prompt_tokens || 0);
+    }
+    
+    // Show output tokens from SDK
+    if (outEl) {
+      outEl.textContent = formatTokenCount(usage.completion_tokens || 0);
+    }
+    
+    // Show cost if available from SDK
+    if (costSep && costEl && usage.total_cost_usd != null) {
+      costSep.style.display = 'inline';
+      costEl.style.display = 'inline';
+      costEl.textContent = '$' + usage.total_cost_usd.toFixed(4);
+    } else if (costSep && costEl) {
+      costSep.style.display = 'none';
+      costEl.style.display = 'none';
+    }
+    
+    // Update tooltip with detailed breakdown
+    let tooltip = `Token usage (from Claude SDK)
+Input:  ${usage.prompt_tokens || 0}
+Output: ${usage.completion_tokens || 0}`;
+    
+    // Add input breakdown if available (SDK provides base + cache)
+    if (usage.input_tokens_base !== undefined || usage.cache_read_tokens || usage.cache_write_tokens) {
+      tooltip += `
+  Base: ${usage.input_tokens_base || 0}
+  Cache read: ${usage.cache_read_tokens || 0}
+  Cache write: ${usage.cache_write_tokens || 0}`;
+    }
+    
+    tooltip += `
+Total: ${usage.total_tokens || 0}`;
+    
+    // Add cost if available
+    if (usage.total_cost_usd != null) {
+      tooltip += `
+Cost: $${usage.total_cost_usd.toFixed(4)}`;
+    }
+    
+    display.title = tooltip;
+  };
+
+  // Update token display for a specific message ID
+  const updateTokenDisplayForMessage = (messageId) => {
+    if (!messageId) return;
+    
+    // Get usage data by message ID
+    const usage = window.acpTokenUsage?.[messageId];
+    if (!usage) return;
+    
+    // Display on this specific bubble (by message ID)
+    const displayId = `acp-token-display-${messageId}`;
+    let display = document.getElementById(displayId);
+    
+    if (!display) {
+      // Find the human message by its data-message-id attribute
+      const humanMessageContainer = document.querySelector(`[data-message-id="${messageId}"]`);
+      if (humanMessageContainer) {
+        const humanMessage = humanMessageContainer.querySelector('.composer-human-message') || humanMessageContainer;
+        // Find the inner flex container that holds the message content
+        const contentContainer = humanMessage.querySelector('.flex.flex-col');
+        if (contentContainer) {
+          display = createTokenDisplay(displayId);
+          // Append as a new row at the bottom of the message
+          contentContainer.appendChild(display);
+        }
+      }
+    }
+    updateSingleDisplay(display, usage);
+  };
+
+  // Update token displays for ALL messages that have usage data
+  const updateAllTokenDisplays = () => {
+    if (!window.acpTokenUsage) return;
+    
+    for (const messageId of Object.keys(window.acpTokenUsage)) {
+      updateTokenDisplayForMessage(messageId);
+    }
+  };
+
+  const updateTokenDisplay = (composerId) => {
+    // Get the message ID associated with this composer's current request
+    if (!window.acpCurrentMessageId) window.acpCurrentMessageId = {};
+    const messageId = window.acpCurrentMessageId[composerId];
+    
+    // Update the current message
+    updateTokenDisplayForMessage(messageId);
+    
+    // Also update all other messages (in case DOM was re-rendered)
+    updateAllTokenDisplays();
+  };
+
+  // Expose update functions globally
+  window.acpUpdateTokenDisplay = updateTokenDisplay;
+  window.acpUpdateAllTokenDisplays = updateAllTokenDisplays;
+
   const installAcpExtensionBridge = () => {
     window.acpExtensionBridge = {
       async sendMessage(provider, message, composerId, callbacks, options = {}) {
         window.acpLog?.('INFO', '[ACP Bridge] sendMessage called with provider:', provider.id, 'composerId:', composerId);
+
+        // Capture the message ID for this request (from the sticky human message)
+        // This associates this request with a specific message bubble
+        // Use querySelectorAll and get the LAST one, since new messages are appended at the end
+        if (!window.acpCurrentMessageId) window.acpCurrentMessageId = {};
+        const stickyHumanMessages = document.querySelectorAll('.composer-sticky-human-message[data-message-id]');
+        const stickyHumanMessage = stickyHumanMessages.length > 0 ? stickyHumanMessages[stickyHumanMessages.length - 1] : null;
+        const messageId = stickyHumanMessage?.getAttribute('data-message-id');
+        
+        if (messageId) {
+          window.acpCurrentMessageId[composerId] = messageId;
+          window.acpLog?.('INFO', '[ACP Bridge] 📍 Associated with message:', messageId);
+        }
+        
+        // Initialize token tracking for THIS MESSAGE (stored by message ID to preserve history)
+        if (messageId) {
+          if (!window.acpTokenUsage) window.acpTokenUsage = {};
+          window.acpTokenUsage[messageId] = {
+            prompt_tokens: null,  // Will be set by SDK (null = waiting for data)
+            completion_tokens: 0,
+            total_tokens: 0,
+            source: 'pending'  // Will be overwritten by SDK data
+          };
+          
+          window.acpLog?.('INFO', '[ACP Bridge] 📊 Waiting for SDK usage data...');
+          
+          // Update UI to show pending state
+          updateTokenDisplay(composerId);
+        }
 
         try {
           const response = await fetch('http://localhost:37842/acp/sendMessage', {
@@ -53,6 +252,9 @@ try {
             const decoder = new TextDecoder();
             let buffer = '';
             let fullText = '';
+            
+            // Get the message ID for this request (captured at start of sendMessage)
+            const currentMessageId = window.acpCurrentMessageId?.[composerId];
 
             while (true) {
               const { done, value } = await reader.read();
@@ -83,8 +285,75 @@ try {
                   } else if (data.type === 'mode' && callbacks.onMode) {
                     window.acpLog?.('INFO', '[ACP Bridge] 🧭 Mode update received:', data.currentModeId);
                     callbacks.onMode(data);
+                  } else if (data.type === 'usage') {
+                    // Real-time usage data from Claude SDK (via patched claude-code-acp)
+                    // message_start: input_tokens only (output_tokens excluded as it's always ~1)
+                    // message_delta (final): full output_tokens count
+                    const usage = data.usage;
+                    if (usage && currentMessageId) {
+                      // Total input = base input + cache read + cache write
+                      // (cached tokens still count as input to the model)
+                      const baseInput = usage.input_tokens || 0;
+                      const cacheRead = usage.cache_read_input_tokens || 0;
+                      const cacheWrite = usage.cache_creation_input_tokens || 0;
+                      const totalInput = baseInput + cacheRead + cacheWrite;
+                      const totalOutput = usage.output_tokens || 0;
+                      
+                      window.acpLog?.('INFO', '[ACP Bridge] 📊 Real-time usage: input=' + totalInput + ' (base=' + baseInput + ' cache_read=' + cacheRead + ' cache_write=' + cacheWrite + ') output=' + totalOutput);
+                      
+                      if (!window.acpTokenUsage) window.acpTokenUsage = {};
+                      
+                      // Keep higher values (input can change between API calls, output accumulates)
+                      const existing = window.acpTokenUsage[currentMessageId] || {};
+                      const newInputTokens = Math.max(totalInput, existing.prompt_tokens || 0);
+                      const newOutputTokens = Math.max(totalOutput, existing.completion_tokens || 0);
+                      
+                      window.acpTokenUsage[currentMessageId] = {
+                        prompt_tokens: newInputTokens,
+                        completion_tokens: newOutputTokens,
+                        total_tokens: newInputTokens + newOutputTokens,
+                        // Keep raw values for tooltip breakdown (use latest)
+                        input_tokens_base: baseInput,
+                        cache_read_tokens: cacheRead,
+                        cache_write_tokens: cacheWrite,
+                        source: 'sdk',
+                        streaming: true
+                      };
+                      
+                      // Update UI with real data
+                      updateTokenDisplay(composerId);
+                    }
                   } else if (data.type === 'done') {
                     window.acpLog?.('INFO', '[ACP Bridge] ✅ Stream done marker received');
+                    
+                    // Use final SDK usage
+                    if (data.usage && currentMessageId) {
+                      // Total input = base input + cache read + cache write
+                      const baseInput = data.usage.input_tokens || 0;
+                      const cacheRead = data.usage.cache_read_input_tokens || 0;
+                      const cacheWrite = data.usage.cache_creation_input_tokens || 0;
+                      const totalInput = baseInput + cacheRead + cacheWrite;
+                      const totalOutput = data.usage.output_tokens || 0;
+                      
+                      window.acpLog?.('INFO', '[ACP Bridge] 📊 Final SDK usage: input=' + totalInput + ' (base=' + baseInput + ' cache_read=' + cacheRead + ' cache_write=' + cacheWrite + ') output=' + totalOutput + ' cost=$' + (data.total_cost_usd?.toFixed(4) || '?'));
+                      
+                      if (!window.acpTokenUsage) window.acpTokenUsage = {};
+                      window.acpTokenUsage[currentMessageId] = {
+                        prompt_tokens: totalInput,
+                        completion_tokens: totalOutput,
+                        total_tokens: totalInput + totalOutput,
+                        input_tokens_base: baseInput,
+                        cache_read_tokens: cacheRead,
+                        cache_write_tokens: cacheWrite,
+                        total_cost_usd: data.total_cost_usd,
+                        modelUsage: data.modelUsage,
+                        source: 'sdk_final'
+                      };
+                    }
+                    
+                    // Update the UI display
+                    updateTokenDisplay(composerId);
+                    
                     if (callbacks.onDone) {
                       callbacks.onDone(data);
                     }
@@ -97,7 +366,14 @@ try {
 
             const streamDuration = Date.now() - streamStart;
             window.acpLog?.('INFO', '[ACP Bridge] 📡 Stream completed in', streamDuration, 'ms | text length:', fullText.length);
-            return { text: fullText };
+            return {
+              text: fullText,
+              usage: (currentMessageId && window.acpTokenUsage?.[currentMessageId]) || {
+                prompt_tokens: 0,
+                completion_tokens: 0,
+                total_tokens: 0
+              }
+            };
           } else {
             // Non-streaming mode
             const result = await response.json();
@@ -191,6 +467,39 @@ try {
   installAcpExtensionBridge();
   // Ensure latest bridge implementation wins even if older patches run later
   setTimeout(installAcpExtensionBridge, 0);
+
+  // Set up a MutationObserver to re-add token displays when DOM changes
+  // (Cursor's React UI can re-render and remove our injected elements)
+  const setupTokenDisplayObserver = () => {
+    const observer = new MutationObserver((mutations) => {
+      // Debounce: only update if we have token usage data
+      if (!window.acpTokenUsage || Object.keys(window.acpTokenUsage).length === 0) return;
+      
+      // Check if any human message containers were added/modified
+      for (const mutation of mutations) {
+        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+          // Schedule an update (debounced)
+          if (!window._acpTokenDisplayUpdatePending) {
+            window._acpTokenDisplayUpdatePending = true;
+            requestAnimationFrame(() => {
+              window._acpTokenDisplayUpdatePending = false;
+              window.acpUpdateAllTokenDisplays?.();
+            });
+          }
+          break;
+        }
+      }
+    });
+    
+    // Observe the composer pane for changes
+    const composerPane = document.querySelector('.composer-pane') || document.body;
+    observer.observe(composerPane, { childList: true, subtree: true });
+    
+    window.acpLog?.('INFO', '[ACP] Token display observer installed');
+  };
+  
+  // Set up observer after a short delay to ensure DOM is ready
+  setTimeout(setupTokenDisplayObserver, 1000);
 
   window.acpLog?.('INFO', "[ACP] Extension bridge installed - using HTTP on localhost:37842");
 
