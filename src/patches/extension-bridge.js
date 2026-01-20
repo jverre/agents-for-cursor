@@ -209,24 +209,14 @@ Cost: $${usage.total_cost_usd.toFixed(4)}`;
         }
       }
       
-      // Strategy 3: Fallback - find the last sticky human message
+      // No fallback - only attach to exact matches to avoid spam
+      // Only log once per messageId to avoid spam
       if (!display) {
-        window.acpDebug?.('[ACP] Strategy 3 (fallback to last sticky human message)');
-        const stickyMessages = document.querySelectorAll('.composer-sticky-human-message');
-        if (stickyMessages.length > 0) {
-          const lastSticky = stickyMessages[stickyMessages.length - 1];
-          const humanMessage = lastSticky.querySelector('.composer-human-message');
-          const flexContainer = humanMessage?.querySelector('.flex.flex-col');
-          if (flexContainer && !flexContainer.querySelector(`#${displayId}`)) {
-            display = createTokenDisplay(displayId);
-            flexContainer.appendChild(display);
-            window.acpLog?.('INFO', '[ACP] ✅ Token display attached to last sticky (fallback): ' + messageId?.slice?.(0, 8));
-          }
+        if (!window._acpLoggedMissingDisplays) window._acpLoggedMissingDisplays = new Set();
+        if (!window._acpLoggedMissingDisplays.has(messageId)) {
+          window._acpLoggedMissingDisplays.add(messageId);
+          window.acpDebug?.('[ACP] Could not find exact match for token display: ' + messageId?.slice?.(0, 12));
         }
-      }
-      
-      if (!display) {
-        window.acpLog?.('WARN', '[ACP] ⚠️ Could not find place to attach token display for: ' + messageId?.slice?.(0, 12));
       }
     }
     updateSingleDisplay(display, usage);
