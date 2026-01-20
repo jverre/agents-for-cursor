@@ -134,7 +134,156 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
           return result;
         };
       };
+      
+      // Install global fetch interceptor to capture Cursor backend streaming data
+      const installFetchInterceptor = () => {
+        if (window._acpFetchIntercepted) return;
+        window._acpFetchIntercepted = true;
+        
+        const originalFetch = window.fetch;
+        window.fetch = async function(...args) {
+          const [url, options] = args;
+          const urlStr = typeof url === 'string' ? url : url?.url || '';
+          
+          // Only intercept Cursor AI server calls
+          const isAiServerCall = urlStr.includes('aiserver') || 
+                                 urlStr.includes('api.cursor') ||
+                                 urlStr.includes('/v1/chat') ||
+                                 urlStr.includes('stream');
+          
+          if (isAiServerCall && window.ACP_DEBUG) {
+            window.acpLog?.('DEBUG', '[ACP] 🌐 Fetch intercepted:', urlStr.slice(0, 100));
+          }
+          
+          const response = await originalFetch.apply(this, args);
+          
+          // If it's a streaming response to AI server, intercept the body
+          if (isAiServerCall && response.body) {
+            const originalBody = response.body;
+            const reader = originalBody.getReader();
+            
+            const interceptedStream = new ReadableStream({
+              async start(controller) {
+                const decoder = new TextDecoder();
+                try {
+                  while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) {
+                      controller.close();
+                      break;
+                    }
+                    
+                    // Log the raw chunk for debugging
+                    if (window.ACP_DEBUG) {
+                      const text = decoder.decode(value, { stream: true });
+                      // Look for usage/token data in the stream
+                      if (text.includes('usage') || text.includes('token') || text.includes('Token')) {
+                        window.acpLog?.('DEBUG', '[ACP] 🔍 Stream chunk with token data:', text.slice(0, 500));
+                      }
+                      // Log every 10th chunk or if it contains interesting data
+                      if (text.includes('inputTokens') || text.includes('outputTokens') || text.includes('totalCents')) {
+                        window.acpLog?.('INFO', '[ACP] 📊 FOUND TOKEN DATA IN STREAM:', text.slice(0, 1000));
+                      }
+                    }
+                    
+                    controller.enqueue(value);
+                  }
+                } catch (error) {
+                  controller.error(error);
+                }
+              }
+            });
+            
+            // Return a new response with the intercepted stream
+            return new Response(interceptedStream, {
+              headers: response.headers,
+              status: response.status,
+              statusText: response.statusText
+            });
+          }
+          
+          return response;
+        };
+        window.acpLog?.('INFO', '[ACP] ✅ Installed fetch interceptor for streaming debug');
+      };
+      
+      // Install WebSocket interceptor for gRPC-web
+      const installWebSocketInterceptor = () => {
+        if (window._acpWsIntercepted) return;
+        window._acpWsIntercepted = true;
+        
+        const OriginalWebSocket = window.WebSocket;
+        window.WebSocket = function(url, protocols) {
+          const ws = new OriginalWebSocket(url, protocols);
+          
+          if (window.ACP_DEBUG && (url.includes('aiserver') || url.includes('cursor'))) {
+            window.acpLog?.('DEBUG', '[ACP] 🔌 WebSocket opened:', url.slice(0, 100));
+            
+            const originalOnMessage = ws.onmessage;
+            ws.addEventListener('message', function(event) {
+              const data = event.data;
+              if (typeof data === 'string') {
+                if (data.includes('token') || data.includes('usage') || data.includes('Token')) {
+                  window.acpLog?.('DEBUG', '[ACP] 🔍 WS message with token data:', data.slice(0, 500));
+                }
+                if (data.includes('inputTokens') || data.includes('outputTokens')) {
+                  window.acpLog?.('INFO', '[ACP] 📊 FOUND TOKEN DATA IN WS:', data.slice(0, 1000));
+                }
+              }
+            });
+          }
+          
+          return ws;
+        };
+        window.WebSocket.prototype = OriginalWebSocket.prototype;
+        window.acpLog?.('INFO', '[ACP] ✅ Installed WebSocket interceptor for gRPC debug');
+      };
+      
+      // Install XMLHttpRequest interceptor for gRPC-web
+      const installXhrInterceptor = () => {
+        if (window._acpXhrIntercepted) return;
+        window._acpXhrIntercepted = true;
+        
+        const OriginalXHR = window.XMLHttpRequest;
+        window.XMLHttpRequest = function() {
+          const xhr = new OriginalXHR();
+          const originalOpen = xhr.open;
+          const originalSend = xhr.send;
+          let requestUrl = '';
+          
+          xhr.open = function(method, url, ...args) {
+            requestUrl = url;
+            if (window.ACP_DEBUG && (url.includes('aiserver') || url.includes('cursor') || url.includes('grpc'))) {
+              window.acpLog?.('DEBUG', '[ACP] 📡 XHR opened:', method, url.slice(0, 100));
+            }
+            return originalOpen.apply(this, [method, url, ...args]);
+          };
+          
+          xhr.send = function(body) {
+            if (window.ACP_DEBUG && (requestUrl.includes('aiserver') || requestUrl.includes('grpc'))) {
+              xhr.addEventListener('load', function() {
+                const response = xhr.responseText || '';
+                if (response.includes('token') || response.includes('usage') || response.includes('Token')) {
+                  window.acpLog?.('DEBUG', '[ACP] 🔍 XHR response with token data:', response.slice(0, 500));
+                }
+                if (response.includes('inputTokens') || response.includes('outputTokens')) {
+                  window.acpLog?.('INFO', '[ACP] 📊 FOUND TOKEN DATA IN XHR:', response.slice(0, 1000));
+                }
+              });
+            }
+            return originalSend.apply(this, [body]);
+          };
+          
+          return xhr;
+        };
+        window.XMLHttpRequest.prototype = OriginalXHR.prototype;
+        window.acpLog?.('INFO', '[ACP] ✅ Installed XHR interceptor for gRPC debug');
+      };
+      
       installServiceHooks();
+      installFetchInterceptor();
+      installWebSocketInterceptor();
+      installXhrInterceptor();
 
       // Track current model for slash command filtering
       if (window.acpSlashCommandIntegration?.setCurrentModel) {
