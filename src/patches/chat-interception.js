@@ -30,9 +30,15 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
         window._cursorComposerDataService = svc;
         
         // Expose aiClientService for token usage polling
+        // Debug: log available services
+        const availableServices = Object.keys(this).filter(k => k.includes('Service') || k.includes('service'));
+        window.acpDebug?.('[ACP] Available services in this context:', availableServices.slice(0, 20).join(', '));
+        
         if (this._aiClientService) {
           window._cursorAiClientService = this._aiClientService;
           window.acpLog?.('INFO', '[ACP] ✅ Exposed _aiClientService for token polling');
+        } else {
+          window.acpLog?.('WARN', '[ACP] ⚠️ _aiClientService not found in this context');
         }
         
         // Token polling function for real-time updates
