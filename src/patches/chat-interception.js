@@ -30,15 +30,38 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
         window._cursorComposerDataService = svc;
         
         // Expose aiClientService for token usage polling
-        // Debug: log available services
-        const availableServices = Object.keys(this).filter(k => k.includes('Service') || k.includes('service'));
-        window.acpDebug?.('[ACP] Available services in this context:', availableServices.slice(0, 20).join(', '));
+        // Try to get aiClientService via instantiationService
+        if (this._instantiationService) {
+          try {
+            // Try to find and expose the aiClientService
+            this._instantiationService.invokeFunction(accessor => {
+              // Look for aiClientService in the accessor's services
+              const services = accessor._services || accessor.services;
+              if (services) {
+                // Try to find aiClientService by iterating
+                for (const [key, value] of services.entries ? services.entries() : Object.entries(services)) {
+                  const keyStr = key?.toString?.() || String(key);
+                  if (keyStr.includes('aiClient') || keyStr.includes('AiClient')) {
+                    window._cursorAiClientService = value;
+                    window.acpLog?.('INFO', '[ACP] ✅ Found aiClientService via instantiationService: ' + keyStr);
+                    break;
+                  }
+                }
+              }
+              
+              // Also try to get it directly if we can find the service identifier
+              if (!window._cursorAiClientService) {
+                // Log what we can find
+                window.acpDebug?.('[ACP] Services map type:', typeof services, services?.size || Object.keys(services || {}).length);
+              }
+            });
+          } catch (e) {
+            window.acpDebug?.('[ACP] Error accessing instantiationService:', e.message);
+          }
+        }
         
-        if (this._aiClientService) {
-          window._cursorAiClientService = this._aiClientService;
-          window.acpLog?.('INFO', '[ACP] ✅ Exposed _aiClientService for token polling');
-        } else {
-          window.acpLog?.('WARN', '[ACP] ⚠️ _aiClientService not found in this context');
+        if (!window._cursorAiClientService) {
+          window.acpLog?.('WARN', '[ACP] ⚠️ Could not find aiClientService - token polling disabled');
         }
         
         // Token polling function for real-time updates
