@@ -65,6 +65,37 @@ function normalizeModeId(modeId) {
     return null;
 }
 
+// Path to vendored claude-code-acp (patched to forward usage data)
+const VENDORED_CLAUDE_CODE_ACP_DIR = path.join(__dirname, '..', 'vendor', 'claude-code-acp');
+const VENDORED_CLAUDE_CODE_ACP = path.join(VENDORED_CLAUDE_CODE_ACP_DIR, 'dist', 'index.js');
+
+/**
+ * Ensure vendored package has its dependencies installed
+ * This is done lazily on first use to avoid bloating the extension
+ */
+async function ensureVendoredDependencies() {
+    const nodeModulesPath = path.join(VENDORED_CLAUDE_CODE_ACP_DIR, 'node_modules');
+    if (fs.existsSync(nodeModulesPath)) {
+        return true; // Already installed
+    }
+    
+    acpLog('INFO', '[ACP] Installing vendored package dependencies (first run only)...');
+    try {
+        const { execSync } = require('child_process');
+        execSync('npm install --omit=dev --no-audit --no-fund', {
+            cwd: VENDORED_CLAUDE_CODE_ACP_DIR,
+            encoding: 'utf8',
+            stdio: 'pipe',
+            timeout: 120000 // 2 minute timeout
+        });
+        acpLog('INFO', '[ACP] Dependencies installed successfully');
+        return true;
+    } catch (error) {
+        acpLog('ERROR', '[ACP] Failed to install dependencies:', error.message);
+        return false;
+    }
+}
+
 /**
  * ACP Agent Manager - Handles subprocess lifecycle and JSON-RPC communication
  */
@@ -76,6 +107,7 @@ class ACPAgentManager {
         this.terminals = new Map(); // Map<terminalId, { process, output, exitCode, done }>
         this.nextMessageId = 1;
         this.nextTerminalId = 1;
+        this.vendoredDepsInstalled = null; // null = not checked, true/false = result
     }
 
     /**
@@ -87,7 +119,26 @@ class ACPAgentManager {
         }
 
         const workspacePath = getWorkspacePath();
-        const proc = spawn(provider.command, provider.args || [], {
+        let command = provider.command;
+        let args = provider.args || [];
+        
+        // For claude-code, try to use our patched version with usage data
+        if (provider.id === 'claude-code' && fs.existsSync(VENDORED_CLAUDE_CODE_ACP)) {
+            // Check/install dependencies (cached after first check)
+            if (this.vendoredDepsInstalled === null) {
+                this.vendoredDepsInstalled = await ensureVendoredDependencies();
+            }
+            
+            if (this.vendoredDepsInstalled) {
+                command = 'node';
+                args = [VENDORED_CLAUDE_CODE_ACP];
+                acpLog('INFO', '[ACP] Using vendored claude-code-acp with usage data patches');
+            } else {
+                acpLog('WARN', '[ACP] Falling back to npx (vendored deps not available)');
+            }
+        }
+        
+        const proc = spawn(command, args, {
             stdio: ['pipe', 'pipe', 'pipe'],
             cwd: workspacePath,
             env: { ...process.env, ...provider.env }
@@ -749,6 +800,10 @@ async function activate(context) {
                                 } else if (update?.sessionUpdate === 'current_mode_update') {
                                     console.log(`[ACP] 🧭 Mode update session=${sessionId.slice(0, 8)} mode=${update.currentModeId}`);
                                     res.write(JSON.stringify({ type: 'mode', ...update }) + '\n');
+                                } else if (update?.sessionUpdate === 'usage_update') {
+                                    // Real-time usage data from Claude SDK (via patched claude-code-acp)
+                                    console.log(`[ACP] 📊 Usage update session=${sessionId.slice(0, 8)} input=${update.usage?.input_tokens || 0} output=${update.usage?.output_tokens || 0}`);
+                                    res.write(JSON.stringify({ type: 'usage', usage: update.usage }) + '\n');
                                 }
                             }
                         };
@@ -757,13 +812,20 @@ async function activate(context) {
 
                         try {
                             // Send prompt and wait for completion
-                            await agentManager.sendRequest(agent, 'session/prompt', {
+                            const promptResult = await agentManager.sendRequest(agent, 'session/prompt', {
                                 sessionId: sessionId,
                                 prompt: [{ type: 'text', text: message }]
                             });
 
-                            // Send done marker and end
-                            res.write(JSON.stringify({ type: 'done' }) + '\n');
+                            // Send done marker with final usage data from PromptResponse._meta
+                            const donePayload = { type: 'done' };
+                            if (promptResult?._meta) {
+                                donePayload.usage = promptResult._meta.usage;
+                                donePayload.total_cost_usd = promptResult._meta.total_cost_usd;
+                                donePayload.modelUsage = promptResult._meta.modelUsage;
+                                console.log(`[ACP] 📊 Final usage: input=${donePayload.usage?.input_tokens || 0} output=${donePayload.usage?.output_tokens || 0} cost=$${donePayload.total_cost_usd?.toFixed(4) || '?'}`);
+                            }
+                            res.write(JSON.stringify(donePayload) + '\n');
                             res.end();
                         } finally {
                             // Always clean up listener

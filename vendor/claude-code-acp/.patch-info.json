@@ -1,0 +1,10 @@
+{
+  "packageName": "@zed-industries/claude-code-acp",
+  "version": "0.13.1",
+  "patchedAt": "2026-01-19T21:57:26.941Z",
+  "patchCount": 3,
+  "patches": [
+    "Added _meta.usage, _meta.total_cost_usd, _meta.modelUsage to PromptResponse",
+    "Added usage_update notifications from message_start/message_delta events"
+  ]
+}

@@ -16,40 +16,425 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
       const composerHandle = this._composerDataService.getWeakHandleOptimistic({{e}});
       const modelName = {{n}}?.modelOverride || composerHandle?.data?.modelConfig?.modelName || '';
 
-      // Install plan payload logger (helps capture Auto model plan bubble format)
-      const installPlanLogger = () => {
-        if (window._acpPlanLoggerInstalled || !this._composerDataService) return;
-        window._acpPlanLoggerInstalled = true;
+      // Install plan payload logger and token tracking hook
+      const installServiceHooks = () => {
+        if (window._acpServiceHooksInstalled || !this._composerDataService) return;
+        window._acpServiceHooksInstalled = true;
         window._acpPlanLoggedBubbles = window._acpPlanLoggedBubbles || new Set();
         const svc = this._composerDataService;
+        
+        // Expose service for extension-bridge token tracking
+        if (window._acpHookComposerService) {
+          window._acpHookComposerService(svc);
+        }
+        window._cursorComposerDataService = svc;
+        
+        // Expose aiClientService for token usage polling
+        // Try to get aiClientService via instantiationService
+        if (this._instantiationService) {
+          try {
+            // Try to find and expose the aiClientService
+            this._instantiationService.invokeFunction(accessor => {
+              // Look for aiClientService in the accessor's services
+              const services = accessor._services || accessor.services;
+              if (services) {
+                // Try to find aiClientService by iterating
+                for (const [key, value] of services.entries ? services.entries() : Object.entries(services)) {
+                  const keyStr = key?.toString?.() || String(key);
+                  if (keyStr.includes('aiClient') || keyStr.includes('AiClient')) {
+                    window._cursorAiClientService = value;
+                    window.acpLog?.('INFO', '[ACP] ✅ Found aiClientService via instantiationService: ' + keyStr);
+                    break;
+                  }
+                }
+              }
+              
+              // Also try to get it directly if we can find the service identifier
+              if (!window._cursorAiClientService) {
+                // Log what we can find
+                window.acpDebug?.('[ACP] Services map type:', typeof services, services?.size || Object.keys(services || {}).length);
+              }
+            });
+          } catch (e) {
+            window.acpDebug?.('[ACP] Error accessing instantiationService:', e.message);
+          }
+        }
+        
+        if (!window._cursorAiClientService) {
+          window.acpLog?.('WARN', '[ACP] ⚠️ Could not find aiClientService - token polling disabled');
+        }
+        
+        // Token polling function for real-time updates
+        const startTokenPolling = (bubbleId, usageUuid) => {
+          if (!window._cursorAiClientService?.getTokenUsage) {
+            window.acpLog?.('WARN', '[ACP] Cannot poll - aiClientService not available');
+            return;
+          }
+          
+          // Track active polling sessions
+          if (!window._acpActivePolling) window._acpActivePolling = new Set();
+          if (window._acpActivePolling.has(bubbleId)) {
+            window.acpDebug?.('[ACP] Already polling for bubbleId=' + bubbleId.slice(0, 12));
+            return;
+          }
+          window._acpActivePolling.add(bubbleId);
+          
+          let pollCount = 0;
+          const maxPolls = 60; // Max 60 polls (30 seconds at 500ms interval)
+          const pollInterval = 500; // Poll every 500ms
+          let lastInputTokens = 0;
+          let lastOutputTokens = 0;
+          
+          const poll = async () => {
+            if (pollCount >= maxPolls) {
+              window.acpLog?.('INFO', '[ACP] 🛑 Token polling stopped (max polls reached) for bubbleId=' + bubbleId.slice(0, 12));
+              window._acpActivePolling.delete(bubbleId);
+              return;
+            }
+            
+            try {
+              const result = await window._cursorAiClientService.getTokenUsage({ usageUuid });
+              const { inputTokens, outputTokens } = result;
+              
+              // Only update if tokens changed
+              if (inputTokens !== lastInputTokens || outputTokens !== lastOutputTokens) {
+                lastInputTokens = inputTokens;
+                lastOutputTokens = outputTokens;
+                
+                window.acpLog?.('INFO', '[ACP] 📊 Token poll #' + pollCount + ': in=' + inputTokens + ' out=' + outputTokens + ' bubbleId=' + bubbleId.slice(0, 12));
+                
+                // Update token display
+                if (!window.acpTokenUsage) window.acpTokenUsage = {};
+                const existing = window.acpTokenUsage[bubbleId];
+                
+                // Only update if not from ACP SDK (which has more detailed data)
+                if (!existing || existing.source === 'cursor' || existing.source === 'cursor_polling' || !existing.source) {
+                  window.acpTokenUsage[bubbleId] = {
+                    prompt_tokens: inputTokens || 0,
+                    completion_tokens: outputTokens || 0,
+                    total_tokens: (inputTokens || 0) + (outputTokens || 0),
+                    source: 'cursor_polling'
+                  };
+                  
+                  // Trigger UI update
+                  window.acpUpdateAllTokenDisplays?.();
+                }
+                
+                // If we got non-zero tokens and they haven't changed for 2 polls, stop polling
+                if (inputTokens > 0 && outputTokens > 0) {
+                  // Check if response is complete (tokens stabilized)
+                  if (pollCount > 2) {
+                    window.acpLog?.('INFO', '[ACP] ✅ Token polling complete: in=' + inputTokens + ' out=' + outputTokens);
+                    window._acpActivePolling.delete(bubbleId);
+                    return;
+                  }
+                }
+              }
+              
+              pollCount++;
+              setTimeout(poll, pollInterval);
+            } catch (error) {
+              window.acpDebug?.('[ACP] Token poll error:', error.message);
+              pollCount++;
+              setTimeout(poll, pollInterval);
+            }
+          };
+          
+          // Start polling after a short delay
+          setTimeout(poll, 200);
+        };
+        
+        // Expose polling function globally
+        window._acpStartTokenPolling = startTokenPolling;
+        
+        // Hook updateComposerBubble for direct token updates
+        const originalUpdateBubble = svc.updateComposerBubble?.bind(svc);
+        if (originalUpdateBubble && !svc._acpBubbleHooked) {
+          svc._acpBubbleHooked = true;
+          svc.updateComposerBubble = function(composerHandle, bubbleId, updates) {
+            // Debug: log ALL updateComposerBubble calls with full update object
+            try {
+              // Create a safe copy of updates for logging (handle circular refs)
+              const safeUpdates = {};
+              if (updates) {
+                for (const key of Object.keys(updates)) {
+                  const val = updates[key];
+                  if (val === null || val === undefined) {
+                    safeUpdates[key] = val;
+                  } else if (typeof val === 'function') {
+                    safeUpdates[key] = '[Function]';
+                  } else if (typeof val === 'object') {
+                    try {
+                      // Try to stringify, but limit depth
+                      safeUpdates[key] = JSON.parse(JSON.stringify(val));
+                    } catch {
+                      safeUpdates[key] = '[Object - circular or too deep]';
+                    }
+                  } else {
+                    safeUpdates[key] = val;
+                  }
+                }
+              }
+              window.acpDebug?.('[ACP] updateComposerBubble FULL:', JSON.stringify({
+                bubbleId: bubbleId,
+                composerId: composerHandle?.composerId?.slice?.(0, 12),
+                updates: safeUpdates
+              }, null, 2));
+            } catch (e) {
+              window.acpDebug?.('[ACP] updateComposerBubble (logging error):', e.message, 'bubbleId=' + bubbleId);
+            }
+            
+            // Capture tokenCount updates from Cursor native models
+            if (updates?.tokenCount) {
+              const { inputTokens, outputTokens } = updates.tokenCount;
+              // Log the FULL bubbleId to see what we're getting
+              window.acpLog?.('INFO', '[ACP] 📊 Cursor native tokenCount: bubbleId=' + bubbleId + ' input=' + inputTokens + ' output=' + outputTokens);
+              
+              // Store token data for display
+              if (bubbleId) {
+                if (!window.acpTokenUsage) window.acpTokenUsage = {};
+                const existing = window.acpTokenUsage[bubbleId];
+                window.acpDebug?.('[ACP] Token storage: fullBubbleId=' + bubbleId + ' existing=' + !!existing);
+                // Only update if not from ACP SDK (which has more detailed data)
+                if (!existing || existing.source === 'cursor' || !existing.source) {
+                  window.acpTokenUsage[bubbleId] = {
+                    prompt_tokens: inputTokens || 0,
+                    completion_tokens: outputTokens || 0,
+                    total_tokens: (inputTokens || 0) + (outputTokens || 0),
+                    source: 'cursor'
+                  };
+                  window.acpLog?.('INFO', '[ACP] ✅ Stored token usage: key=' + bubbleId + ' in=' + inputTokens + ' out=' + outputTokens);
+                  // Trigger UI update
+                  window.acpUpdateAllTokenDisplays?.();
+                } else {
+                  window.acpDebug?.('[ACP] Skipped token update - already have SDK data');
+                }
+              }
+            }
+            
+            // Also capture usageUuid for potential future cost fetching
+            if (updates?.usageUuid) {
+              window.acpLog?.('INFO', '[ACP] 📋 usageUuid received: bubbleId=' + (bubbleId?.slice?.(0, 8) || bubbleId) + ' uuid=' + updates.usageUuid?.slice?.(0, 12));
+              // Store usageUuid for potential API call to get cost data
+              if (!window.acpUsageUuids) window.acpUsageUuids = {};
+              window.acpUsageUuids[bubbleId] = updates.usageUuid;
+            }
+            
+            return originalUpdateBubble(composerHandle, bubbleId, updates);
+          };
+          window.acpLog?.('INFO', '[ACP] ✅ Hooked updateComposerBubble for Cursor native token tracking');
+        }
+        
         const originalUpdate = svc.updateComposerDataSetStore?.bind(svc);
         if (!originalUpdate) return;
+        
+        // Track usageUuids we've already logged
+        if (!window._acpLoggedUsageUuids) window._acpLoggedUsageUuids = new Set();
+        
         svc.updateComposerDataSetStore = (handle, updater) => {
+          // Capture the state BEFORE the update
+          const mapBefore = handle?.data?.conversationMap ? 
+            (handle.data.conversationMap.forEach ? 
+              new Map(handle.data.conversationMap) : 
+              new Map(Object.entries(handle.data.conversationMap))) : null;
+          
           const result = originalUpdate(handle, updater);
-          if (!window.ACP_DEBUG) return result;
+          
+          // Check for usageUuid changes AFTER the update
           try {
-            const map = handle?.data?.conversationMap;
-            if (!map) return result;
-            const inspectBubble = (bubbleId, bubble) => {
-              if (!bubble) return;
-              const hasPlanData = !!bubble.isPlanExecution || (Array.isArray(bubble.todos) && bubble.todos.length > 0);
-              if (hasPlanData && !window._acpPlanLoggedBubbles.has(bubbleId)) {
-                window._acpPlanLoggedBubbles.add(bubbleId);
-                window.acpLog?.('INFO', '[ACP] 🗂️ Plan bubble snapshot:', JSON.stringify({ bubbleId, bubble }, null, 2));
+            const mapAfter = handle?.data?.conversationMap;
+            if (mapAfter) {
+              const checkBubble = (bubbleId, bubble) => {
+                if (!bubble) return;
+                
+                // Check for usageUuid
+                if (bubble.usageUuid && !window._acpLoggedUsageUuids.has(bubbleId + ':' + bubble.usageUuid)) {
+                  window._acpLoggedUsageUuids.add(bubbleId + ':' + bubble.usageUuid);
+                  window.acpLog?.('INFO', '[ACP] 🔑 usageUuid ARRIVED via DataSetStore: bubbleId=' + bubbleId.slice(0, 12) + ' uuid=' + bubble.usageUuid.slice(0, 16) + ' timestamp=' + new Date().toISOString());
+                  
+                  // Store for potential token fetching
+                  if (!window.acpUsageUuids) window.acpUsageUuids = {};
+                  window.acpUsageUuids[bubbleId] = bubble.usageUuid;
+                  
+                  // Start polling for real-time token updates
+                  if (window._cursorAiClientService?.getTokenUsage && window._acpStartTokenPolling) {
+                    window.acpLog?.('INFO', '[ACP] 🔄 Starting token polling for bubbleId=' + bubbleId.slice(0, 12));
+                    window._acpStartTokenPolling(bubbleId, bubble.usageUuid);
+                  }
+                }
+                
+                // Check for plan data
+                if (window.ACP_DEBUG) {
+                  const hasPlanData = !!bubble.isPlanExecution || (Array.isArray(bubble.todos) && bubble.todos.length > 0);
+                  if (hasPlanData && !window._acpPlanLoggedBubbles.has(bubbleId)) {
+                    window._acpPlanLoggedBubbles.add(bubbleId);
+                    window.acpLog?.('INFO', '[ACP] 🗂️ Plan bubble snapshot:', JSON.stringify({ bubbleId, bubble }, null, 2));
+                  }
+                }
+              };
+              
+              if (mapAfter.forEach) {
+                mapAfter.forEach((bubble, bubbleId) => checkBubble(bubbleId, bubble));
+              } else {
+                Object.entries(mapAfter).forEach(([bubbleId, bubble]) => checkBubble(bubbleId, bubble));
               }
-            };
-            if (map.forEach) {
-              map.forEach((bubble, bubbleId) => inspectBubble(bubbleId, bubble));
-            } else {
-              Object.entries(map).forEach(([bubbleId, bubble]) => inspectBubble(bubbleId, bubble));
             }
           } catch (error) {
-            window.acpLog?.('ERROR', '[ACP] Plan logger error:', error);
+            window.acpLog?.('ERROR', '[ACP] DataSetStore logger error:', error);
           }
           return result;
         };
       };
-      installPlanLogger();
+      
+      // Install global fetch interceptor to capture Cursor backend streaming data
+      const installFetchInterceptor = () => {
+        if (window._acpFetchIntercepted) return;
+        window._acpFetchIntercepted = true;
+        
+        const originalFetch = window.fetch;
+        window.fetch = async function(...args) {
+          const [url, options] = args;
+          const urlStr = typeof url === 'string' ? url : url?.url || '';
+          
+          // Only intercept Cursor AI server calls
+          const isAiServerCall = urlStr.includes('aiserver') || 
+                                 urlStr.includes('api.cursor') ||
+                                 urlStr.includes('/v1/chat') ||
+                                 urlStr.includes('stream');
+          
+          if (isAiServerCall && window.ACP_DEBUG) {
+            window.acpLog?.('DEBUG', '[ACP] 🌐 Fetch intercepted:', urlStr.slice(0, 100));
+          }
+          
+          const response = await originalFetch.apply(this, args);
+          
+          // If it's a streaming response to AI server, intercept the body
+          if (isAiServerCall && response.body) {
+            const originalBody = response.body;
+            const reader = originalBody.getReader();
+            
+            const interceptedStream = new ReadableStream({
+              async start(controller) {
+                const decoder = new TextDecoder();
+                try {
+                  while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) {
+                      controller.close();
+                      break;
+                    }
+                    
+                    // Log the raw chunk for debugging
+                    if (window.ACP_DEBUG) {
+                      const text = decoder.decode(value, { stream: true });
+                      // Look for usage/token data in the stream
+                      if (text.includes('usage') || text.includes('token') || text.includes('Token')) {
+                        window.acpLog?.('DEBUG', '[ACP] 🔍 Stream chunk with token data:', text.slice(0, 500));
+                      }
+                      // Log every 10th chunk or if it contains interesting data
+                      if (text.includes('inputTokens') || text.includes('outputTokens') || text.includes('totalCents')) {
+                        window.acpLog?.('INFO', '[ACP] 📊 FOUND TOKEN DATA IN STREAM:', text.slice(0, 1000));
+                      }
+                    }
+                    
+                    controller.enqueue(value);
+                  }
+                } catch (error) {
+                  controller.error(error);
+                }
+              }
+            });
+            
+            // Return a new response with the intercepted stream
+            return new Response(interceptedStream, {
+              headers: response.headers,
+              status: response.status,
+              statusText: response.statusText
+            });
+          }
+          
+          return response;
+        };
+        window.acpLog?.('INFO', '[ACP] ✅ Installed fetch interceptor for streaming debug');
+      };
+      
+      // Install WebSocket interceptor for gRPC-web
+      const installWebSocketInterceptor = () => {
+        if (window._acpWsIntercepted) return;
+        window._acpWsIntercepted = true;
+        
+        const OriginalWebSocket = window.WebSocket;
+        window.WebSocket = function(url, protocols) {
+          const ws = new OriginalWebSocket(url, protocols);
+          
+          if (window.ACP_DEBUG && (url.includes('aiserver') || url.includes('cursor'))) {
+            window.acpLog?.('DEBUG', '[ACP] 🔌 WebSocket opened:', url.slice(0, 100));
+            
+            const originalOnMessage = ws.onmessage;
+            ws.addEventListener('message', function(event) {
+              const data = event.data;
+              if (typeof data === 'string') {
+                if (data.includes('token') || data.includes('usage') || data.includes('Token')) {
+                  window.acpLog?.('DEBUG', '[ACP] 🔍 WS message with token data:', data.slice(0, 500));
+                }
+                if (data.includes('inputTokens') || data.includes('outputTokens')) {
+                  window.acpLog?.('INFO', '[ACP] 📊 FOUND TOKEN DATA IN WS:', data.slice(0, 1000));
+                }
+              }
+            });
+          }
+          
+          return ws;
+        };
+        window.WebSocket.prototype = OriginalWebSocket.prototype;
+        window.acpLog?.('INFO', '[ACP] ✅ Installed WebSocket interceptor for gRPC debug');
+      };
+      
+      // Install XMLHttpRequest interceptor for gRPC-web
+      const installXhrInterceptor = () => {
+        if (window._acpXhrIntercepted) return;
+        window._acpXhrIntercepted = true;
+        
+        const OriginalXHR = window.XMLHttpRequest;
+        window.XMLHttpRequest = function() {
+          const xhr = new OriginalXHR();
+          const originalOpen = xhr.open;
+          const originalSend = xhr.send;
+          let requestUrl = '';
+          
+          xhr.open = function(method, url, ...args) {
+            requestUrl = url;
+            if (window.ACP_DEBUG && (url.includes('aiserver') || url.includes('cursor') || url.includes('grpc'))) {
+              window.acpLog?.('DEBUG', '[ACP] 📡 XHR opened:', method, url.slice(0, 100));
+            }
+            return originalOpen.apply(this, [method, url, ...args]);
+          };
+          
+          xhr.send = function(body) {
+            if (window.ACP_DEBUG && (requestUrl.includes('aiserver') || requestUrl.includes('grpc'))) {
+              xhr.addEventListener('load', function() {
+                const response = xhr.responseText || '';
+                if (response.includes('token') || response.includes('usage') || response.includes('Token')) {
+                  window.acpLog?.('DEBUG', '[ACP] 🔍 XHR response with token data:', response.slice(0, 500));
+                }
+                if (response.includes('inputTokens') || response.includes('outputTokens')) {
+                  window.acpLog?.('INFO', '[ACP] 📊 FOUND TOKEN DATA IN XHR:', response.slice(0, 1000));
+                }
+              });
+            }
+            return originalSend.apply(this, [body]);
+          };
+          
+          return xhr;
+        };
+        window.XMLHttpRequest.prototype = OriginalXHR.prototype;
+        window.acpLog?.('INFO', '[ACP] ✅ Installed XHR interceptor for gRPC debug');
+      };
+      
+      installServiceHooks();
+      installFetchInterceptor();
+      installWebSocketInterceptor();
+      installXhrInterceptor();
 
       // Track current model for slash command filtering
       if (window.acpSlashCommandIntegration?.setCurrentModel) {
@@ -1897,6 +2282,14 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                 const s = window[stateKey];
                 if (!s) return;
                 s.streamDone = true;
+
+                // Log token usage
+                const usage = window.acpTokenUsage?.[{{e}}];
+                if (usage) {
+                  window.acpLog?.('INFO', '[ACP] 📊 Token usage:', JSON.stringify(usage));
+                  s.tokenUsage = usage;
+                }
+
                 window.acpDebug?.('[ACP] ✅ end_turn received');
               }
             }
@@ -1936,6 +2329,12 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
             o("status", "completed");
             o("generatingBubbleIds", []);
             o("chatGenerationUUID", void 0);
+
+            // Attach token usage
+            const usage = window.acpTokenUsage?.[{{e}}];
+            if (usage) {
+              o("lastTokenUsage", usage);
+            }
           });
 
           window.acpLog?.('INFO', '[ACP] Message completed successfully');
