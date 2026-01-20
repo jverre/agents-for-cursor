@@ -148,62 +148,85 @@ Cost: $${usage.total_cost_usd.toFixed(4)}`;
     const usage = window.acpTokenUsage?.[messageId];
     if (!usage) return;
     
-    // Display on this specific bubble (by message ID)
-    const displayId = `acp-token-display-${messageId}`;
+    // Sanitize messageId for use in element ID (remove special chars)
+    const safeId = messageId.replace(/[^a-zA-Z0-9-]/g, '_');
+    const displayId = `acp-token-display-${safeId}`;
     let display = document.getElementById(displayId);
+    
+    window.acpDebug?.('[ACP] updateTokenDisplayForMessage: messageId=' + messageId?.slice?.(0, 12) + ' displayId=' + displayId + ' existingDisplay=' + !!display);
     
     if (!display) {
       // Try multiple strategies to find the right place to display tokens
       
-      // Strategy 1: Find human message by data-message-id (for ACP models)
-      let humanMessageContainer = document.querySelector(`[data-message-id="${messageId}"]`);
-      if (humanMessageContainer) {
-        const humanMessage = humanMessageContainer.querySelector('.composer-human-message') || humanMessageContainer;
-        const contentContainer = humanMessage.querySelector('.flex.flex-col');
-        if (contentContainer) {
-          display = createTokenDisplay(displayId);
-          contentContainer.appendChild(display);
-          window.acpDebug?.('[ACP] Token display attached to human message:', messageId?.slice?.(0, 8));
-        }
-      }
+      // Strategy 1: Find element by data-message-id (exact match)
+      let targetElement = document.querySelector(`[data-message-id="${messageId}"]`);
+      window.acpDebug?.('[ACP] Strategy 1 (exact data-message-id): found=' + !!targetElement);
       
-      // Strategy 2: Find AI response bubble by data-bubble-id (for Cursor native models)
-      // The bubbleId is on the AI response, we want to show tokens on the preceding human message
-      if (!display) {
-        const aiBubble = document.querySelector(`[data-bubble-id="${messageId}"]`);
-        if (aiBubble) {
-          // Find the preceding human message (sibling or parent's sibling)
-          let prevSibling = aiBubble.previousElementSibling;
-          while (prevSibling) {
-            const humanMsg = prevSibling.querySelector('.composer-human-message') || 
-                            (prevSibling.classList?.contains('composer-human-message') ? prevSibling : null);
-            if (humanMsg) {
-              const contentContainer = humanMsg.querySelector('.flex.flex-col');
-              if (contentContainer) {
-                display = createTokenDisplay(displayId);
-                contentContainer.appendChild(display);
-                window.acpDebug?.('[ACP] Token display attached to human message (via AI bubble):', messageId?.slice?.(0, 8));
-                break;
-              }
-            }
-            prevSibling = prevSibling.previousElementSibling;
+      // Strategy 2: Find by partial match (messageId might be truncated)
+      if (!targetElement) {
+        // Try to find any element whose data-message-id starts with our messageId
+        const allMessages = document.querySelectorAll('[data-message-id]');
+        for (const el of allMessages) {
+          const elId = el.getAttribute('data-message-id');
+          if (elId?.startsWith(messageId) || messageId?.startsWith(elId?.slice(0, 8))) {
+            targetElement = el;
+            window.acpDebug?.('[ACP] Strategy 2 (partial match): found=' + elId?.slice(0, 12));
+            break;
           }
         }
       }
       
-      // Strategy 3: Find any sticky human message and attach there (fallback)
+      // If we found an AI message, find the preceding human message
+      if (targetElement && targetElement.getAttribute('data-message-role') === 'ai') {
+        window.acpDebug?.('[ACP] Found AI message, looking for preceding human message');
+        // Look for the human message in the same pair container
+        const pairContainer = targetElement.closest('.composer-human-ai-pair-container');
+        if (pairContainer) {
+          const humanInPair = pairContainer.querySelector('[data-message-role="human"]');
+          if (humanInPair) {
+            targetElement = humanInPair;
+            window.acpDebug?.('[ACP] Found human message in pair: ' + humanInPair.getAttribute('data-message-id')?.slice(0, 12));
+          }
+        }
+      }
+      
+      // Now find the right container to append our display
+      if (targetElement) {
+        // Look for .composer-human-message inside, then find .flex.flex-col inside that
+        const humanMessage = targetElement.querySelector('.composer-human-message');
+        window.acpDebug?.('[ACP] Looking for .composer-human-message: found=' + !!humanMessage);
+        
+        if (humanMessage) {
+          // Find the flex container - it's the div with class containing 'flex' and 'flex-col'
+          const flexContainer = humanMessage.querySelector('.flex.flex-col');
+          window.acpDebug?.('[ACP] Looking for .flex.flex-col: found=' + !!flexContainer);
+          
+          if (flexContainer) {
+            display = createTokenDisplay(displayId);
+            flexContainer.appendChild(display);
+            window.acpLog?.('INFO', '[ACP] ✅ Token display attached to human message: ' + messageId?.slice?.(0, 8));
+          }
+        }
+      }
+      
+      // Strategy 3: Fallback - find the last sticky human message
       if (!display) {
+        window.acpDebug?.('[ACP] Strategy 3 (fallback to last sticky human message)');
         const stickyMessages = document.querySelectorAll('.composer-sticky-human-message');
         if (stickyMessages.length > 0) {
-          // Get the last sticky human message
           const lastSticky = stickyMessages[stickyMessages.length - 1];
-          const contentContainer = lastSticky.querySelector('.flex.flex-col');
-          if (contentContainer && !contentContainer.querySelector(`#${displayId}`)) {
+          const humanMessage = lastSticky.querySelector('.composer-human-message');
+          const flexContainer = humanMessage?.querySelector('.flex.flex-col');
+          if (flexContainer && !flexContainer.querySelector(`#${displayId}`)) {
             display = createTokenDisplay(displayId);
-            contentContainer.appendChild(display);
-            window.acpDebug?.('[ACP] Token display attached to last sticky human message:', messageId?.slice?.(0, 8));
+            flexContainer.appendChild(display);
+            window.acpLog?.('INFO', '[ACP] ✅ Token display attached to last sticky (fallback): ' + messageId?.slice?.(0, 8));
           }
         }
+      }
+      
+      if (!display) {
+        window.acpLog?.('WARN', '[ACP] ⚠️ Could not find place to attach token display for: ' + messageId?.slice?.(0, 12));
       }
     }
     updateSingleDisplay(display, usage);

@@ -47,13 +47,14 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
             // Capture tokenCount updates from Cursor native models
             if (updates?.tokenCount) {
               const { inputTokens, outputTokens } = updates.tokenCount;
-              window.acpLog?.('INFO', '[ACP] 📊 Cursor native tokenCount: bubbleId=' + (bubbleId?.slice?.(0, 8) || bubbleId) + ' input=' + inputTokens + ' output=' + outputTokens);
+              // Log the FULL bubbleId to see what we're getting
+              window.acpLog?.('INFO', '[ACP] 📊 Cursor native tokenCount: bubbleId=' + bubbleId + ' input=' + inputTokens + ' output=' + outputTokens);
               
               // Store token data for display
               if (bubbleId) {
                 if (!window.acpTokenUsage) window.acpTokenUsage = {};
                 const existing = window.acpTokenUsage[bubbleId];
-                window.acpDebug?.('[ACP] Token storage check: existing=' + JSON.stringify(existing) + ' source=' + existing?.source);
+                window.acpDebug?.('[ACP] Token storage: fullBubbleId=' + bubbleId + ' existing=' + !!existing);
                 // Only update if not from ACP SDK (which has more detailed data)
                 if (!existing || existing.source === 'cursor' || !existing.source) {
                   window.acpTokenUsage[bubbleId] = {
@@ -62,7 +63,7 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
                     total_tokens: (inputTokens || 0) + (outputTokens || 0),
                     source: 'cursor'
                   };
-                  window.acpDebug?.('[ACP] Stored token usage for bubbleId=' + bubbleId?.slice?.(0, 8));
+                  window.acpLog?.('INFO', '[ACP] ✅ Stored token usage: key=' + bubbleId + ' in=' + inputTokens + ' out=' + outputTokens);
                   // Trigger UI update
                   window.acpUpdateAllTokenDisplays?.();
                 } else {
