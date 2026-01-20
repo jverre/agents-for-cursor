@@ -109,27 +109,54 @@ async submitChatMaybeAbortCurrent({{e}}, {{t}}, {{n}}, {{s}} = {{defaultVal}}) {
         
         const originalUpdate = svc.updateComposerDataSetStore?.bind(svc);
         if (!originalUpdate) return;
+        
+        // Track usageUuids we've already logged
+        if (!window._acpLoggedUsageUuids) window._acpLoggedUsageUuids = new Set();
+        
         svc.updateComposerDataSetStore = (handle, updater) => {
+          // Capture the state BEFORE the update
+          const mapBefore = handle?.data?.conversationMap ? 
+            (handle.data.conversationMap.forEach ? 
+              new Map(handle.data.conversationMap) : 
+              new Map(Object.entries(handle.data.conversationMap))) : null;
+          
           const result = originalUpdate(handle, updater);
-          if (!window.ACP_DEBUG) return result;
+          
+          // Check for usageUuid changes AFTER the update
           try {
-            const map = handle?.data?.conversationMap;
-            if (!map) return result;
-            const inspectBubble = (bubbleId, bubble) => {
-              if (!bubble) return;
-              const hasPlanData = !!bubble.isPlanExecution || (Array.isArray(bubble.todos) && bubble.todos.length > 0);
-              if (hasPlanData && !window._acpPlanLoggedBubbles.has(bubbleId)) {
-                window._acpPlanLoggedBubbles.add(bubbleId);
-                window.acpLog?.('INFO', '[ACP] 🗂️ Plan bubble snapshot:', JSON.stringify({ bubbleId, bubble }, null, 2));
+            const mapAfter = handle?.data?.conversationMap;
+            if (mapAfter) {
+              const checkBubble = (bubbleId, bubble) => {
+                if (!bubble) return;
+                
+                // Check for usageUuid
+                if (bubble.usageUuid && !window._acpLoggedUsageUuids.has(bubbleId + ':' + bubble.usageUuid)) {
+                  window._acpLoggedUsageUuids.add(bubbleId + ':' + bubble.usageUuid);
+                  window.acpLog?.('INFO', '[ACP] 🔑 usageUuid ARRIVED via DataSetStore: bubbleId=' + bubbleId.slice(0, 12) + ' uuid=' + bubble.usageUuid.slice(0, 16) + ' timestamp=' + new Date().toISOString());
+                  
+                  // Store for potential token fetching
+                  if (!window.acpUsageUuids) window.acpUsageUuids = {};
+                  window.acpUsageUuids[bubbleId] = bubble.usageUuid;
+                }
+                
+                // Check for plan data
+                if (window.ACP_DEBUG) {
+                  const hasPlanData = !!bubble.isPlanExecution || (Array.isArray(bubble.todos) && bubble.todos.length > 0);
+                  if (hasPlanData && !window._acpPlanLoggedBubbles.has(bubbleId)) {
+                    window._acpPlanLoggedBubbles.add(bubbleId);
+                    window.acpLog?.('INFO', '[ACP] 🗂️ Plan bubble snapshot:', JSON.stringify({ bubbleId, bubble }, null, 2));
+                  }
+                }
+              };
+              
+              if (mapAfter.forEach) {
+                mapAfter.forEach((bubble, bubbleId) => checkBubble(bubbleId, bubble));
+              } else {
+                Object.entries(mapAfter).forEach(([bubbleId, bubble]) => checkBubble(bubbleId, bubble));
               }
-            };
-            if (map.forEach) {
-              map.forEach((bubble, bubbleId) => inspectBubble(bubbleId, bubble));
-            } else {
-              Object.entries(map).forEach(([bubbleId, bubble]) => inspectBubble(bubbleId, bubble));
             }
           } catch (error) {
-            window.acpLog?.('ERROR', '[ACP] Plan logger error:', error);
+            window.acpLog?.('ERROR', '[ACP] DataSetStore logger error:', error);
           }
           return result;
         };
